@@ -6,12 +6,15 @@ name: build uefi (aston, SM8850 reference)
 jobs:
   uefi-aston:
     name: Mu-Silicium astonPkg (OnePlus 15, same SM8850)
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 240
 
     steps:
       - name: clone Mu-Silicium (recursive, ~5 GB)
         run: git clone --recursive --depth 1 https://github.com/Project-Silicium/Mu-Silicium.git
+
+      - name: python (tomllib needs 3.11+)
+        run: python3 --version
 
       - name: dependencies
         working-directory: Mu-Silicium
