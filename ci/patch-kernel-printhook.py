@@ -10,12 +10,16 @@ import sys
 from pathlib import Path
 
 BLOCK = '''	/* HAKIOS: print our early registers through the loader's print(), whose address
-	 * the loader leaves at boot_args + 0xF00.  x20 is the boot_args VIRTUAL address
-	 * here, and the MMU is still off: convert back to physical with x22/x23 first. */
+	 * the loader leaves at boot_args + 0xF00.  x20 may be either the physical or the
+	 * virtual boot_args address here, so tell them apart before converting. */
 	stp	x9, x30, [sp, #-16]!
+	lsr	x10, x20, #48
+	cbz	x10, 1f
 	sub	x9, x20, x22
 	add	x9, x9, x23
-	ldr	x9, [x9, #0xF00]
+	b	2f
+1:	mov	x9, x20
+2:	ldr	x9, [x9, #0xF00]
 	cbz	x9, 7f
 	mrs	x1, tcr_el1
 	mrs	x2, sctlr_el1
