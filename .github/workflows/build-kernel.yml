@@ -1,7 +1,6 @@
 name: build lafa kernel
 
 "on":
-  push:
   workflow_dispatch:
 
 jobs:
@@ -35,7 +34,6 @@ jobs:
           git -C "$HOME/theos/sdks-git" sparse-checkout set iPhoneOS16.5.sdk
           mkdir -p "$HOME/theos/sdks"
           ln -sfn "$HOME/theos/sdks-git/iPhoneOS16.5.sdk" "$HOME/theos/sdks/iPhoneOS16.5.sdk"
-          du -sh "$HOME/theos" "$HOME/theos/sdks/iPhoneOS16.5.sdk"
 
       - name: hakios source + lafa device package
         run: |
@@ -53,10 +51,40 @@ jobs:
           make lafa_defconfig
           make config
 
+      - name: kernel tree (xnu/apply.sh)
+        run: |
+          cd hakios
+          [ -d xnu-src/xnu-8796.121.2 ] || xnu/apply.sh
+          ls -d xnu-src/xnu-8796.121.2
+
+      - name: host tools (xnu-deps/setup.sh)
+        run: |
+          cd hakios
+          set +e
+          xnu-deps/setup.sh 2>&1 | tee /tmp/setup.log
+          rc=${PIPESTATUS[0]}
+          if [ $rc -ne 0 ]; then
+            echo "::group::exporthdrs.log (tail)"
+            tail -120 xnu-deps/exporthdrs.log 2>/dev/null || echo "(no exporthdrs.log)"
+            echo "::endgroup::"
+            echo "::group::setup.log (tail)"
+            tail -60 /tmp/setup.log
+            echo "::endgroup::"
+          fi
+          exit $rc
+
       - name: build kernel
         run: |
           cd hakios
-          make kernel JOBS=4
+          set +e
+          make kernel JOBS=4 2>&1 | tee /tmp/kernel.log
+          rc=${PIPESTATUS[0]}
+          if [ $rc -ne 0 ]; then
+            echo "::group::kernel log (errors)"
+            grep -n -m 60 -E 'error:|Error [0-9]|undefined reference|fatal error|No rule' /tmp/kernel.log || tail -80 /tmp/kernel.log
+            echo "::endgroup::"
+          fi
+          exit $rc
 
       - name: build loader (placeholder identity, no Apple data)
         run: |
@@ -67,7 +95,6 @@ jobs:
         run: |
           cd hakios
           ls -la hakios-kernel xnuloader/loader.efi || true
-          (cd xnu-src/xnu-8796.121.2 && git log -1 --oneline 2>/dev/null) || true
 
       - name: upload artifacts
         uses: actions/upload-artifact@v4
@@ -76,43 +103,5 @@ jobs:
           path: |
             hakios/hakios-kernel
             hakios/xnuloader/loader.efi
-          if-no-files-found: warn
-
-  # 第二个作业：Mu-Silicium 里同 SoC（SM8850）的 astonPkg（一加 15）。
-  # 它不一定能在 GT8 Pro 上点亮屏幕（面板不同），但能验证"ABL 接受我们的 UEFI 并跑起来"。
-  # 失败不影响上面内核的产物。
-  uefi-aston:
-    name: Mu-Silicium astonPkg (SM8850, reference)
-    runs-on: ubuntu-22.04
-    timeout-minutes: 240
-    continue-on-error: true
-
-    steps:
-      - name: checkout
-        uses: actions/checkout@v4
-
-      - name: clone Mu-Silicium (recursive, ~5 GB)
-        run: git clone --recursive --depth 1 https://github.com/Project-Silicium/Mu-Silicium.git
-
-      - name: dependencies
-        working-directory: Mu-Silicium
-        run: |
-          sudo ./setup_env.sh -p apt || sudo apt-get install -y python3 python3-pip python3-venv nasm iasl uuid-dev
-          python3 -m pip install --user -r pip-requirements.txt
-
-      - name: build aston
-        working-directory: Mu-Silicium
-        run: python3 build_uefi.py -d aston
-
-      - name: show results
-        working-directory: Mu-Silicium
-        run: find Build -maxdepth 4 -type f \( -name '*.fd' -o -name '*.img' \) -printf '%p  %s bytes\n' | head -20
-
-      - name: upload UEFI
-        uses: actions/upload-artifact@v4
-        with:
-          name: uefi-aston
-          path: |
-            Mu-Silicium/Build/**/*.fd
-            Mu-Silicium/Build/**/*.img
+            hakios/xnu-deps/exporthdrs.log
           if-no-files-found: warn
