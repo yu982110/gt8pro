@@ -46,6 +46,11 @@ jobs:
           cd hakios
           python3 tools/hakios-device.py check lafa
 
+      # Ubuntu 22.04 的 glibc 2.35 没有 strlcat/strlcpy（2.38 才加），XNU 的 SETUP 主机工具
+      # replacecontents 要用；ci/patch-hostcompat.py 给 hostcompat.h 补两个实现（它被 -include 进所有主机工具）。
+      - name: hostcompat patch (glibc < 2.38: strlcpy/strlcat)
+        run: python3 ci/patch-hostcompat.py hakios
+
       - name: configure
         run: |
           cd hakios
