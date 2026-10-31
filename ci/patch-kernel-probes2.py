@@ -25,6 +25,7 @@ PROBE = '''	/* HAKIOS PROBE2 {idx} */
 ANCHORS = [
     ("\t// Set up MAIR attr0 for normal memory, attr1 for device memory\n", 3, 0xFFFFFF, 0),
     ("\t// Enable caches, MMU, ROP and JOP\n", 4, 0xFFFF00, 512),
+    ("#if !VMAPPLE\n", 5, 0x00FFFF, 1024),
 ]
 
 
