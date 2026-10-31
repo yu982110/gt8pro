@@ -23,6 +23,11 @@ BLOCK = '''	/* HAKIOS: print our early registers through the loader's print() */
 6:	.asciz "TCR %x SCTLR %x MMFR %x\\n"
 	.align	3
 7:	ldp	x9, x30, [sp], #16
+
+	/* HAKIOS HOLD: do not enable the MMU; stay here so the line stays on the screen
+	 * until the 60 s watchdog resets the board. */
+8:	wfi
+	b	8b
 '''
 
 ANCHOR = "\t// Enable caches, MMU, ROP and JOP\n"
