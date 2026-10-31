@@ -79,6 +79,16 @@ jobs:
           grep -rn "define PAGE_SHIFT\|define ARM_PGBYTES" osfmk pexpert 2>/dev/null | head -10 || true
           echo "=== arm64 dir ==="
           ls osfmk/arm64/ | head -40
+          echo "=== __ARM_16K_PG__ (谁定义的) ==="
+          grep -rn "__ARM_16K_PG__" --include="*.h" --include="*.s" --include="*.c" --include="Makefile*" . 2>/dev/null | head -25 || true
+          echo "=== ARM_16K_PG 在配置里 ==="
+          grep -rn "ARM_16K_PG" config/ bsd/conf/ pexpert/conf/ 2>/dev/null | head -20 || true
+          echo "=== T0SZ_BOOT 分支 (proc_reg.h 925-975) ==="
+          sed -n '925,975p' osfmk/arm64/proc_reg.h
+          echo "=== BOOTSTRAP_TABLE_SIZE ==="
+          grep -rn "BOOTSTRAP_TABLE_SIZE" osfmk pexpert 2>/dev/null | head -10 || true
+          echo "=== bcm2837 配置里的相关选项 ==="
+          grep -n "ARM_16K\|LARGE_VA\|ARM64_PAGE\|PAGE_SIZE" config/MASTER.arm64.bcm2837 2>/dev/null | head -20 || true
 
       - name: host tools (xnu-deps/setup.sh)
         run: |
