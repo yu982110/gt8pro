@@ -11,6 +11,10 @@ from pathlib import Path
 
 BLOCK = '''	/* HAKIOS KVA TEST: read through TTBR1 with the MMU on, then turn it off and draw */
 	ldr	x9, [x22]
+	mrs	x10, sctlr_el1
+	bic	x10, x10, #1
+	msr	sctlr_el1, x10
+	isb	sy
 	movz	x9, #0xFC80, lsl #16
 	ldr	x10, =0x{off:X}
 	add	x9, x9, x10
