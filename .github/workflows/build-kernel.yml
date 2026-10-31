@@ -79,6 +79,9 @@ jobs:
           fi
           exit $rc
 
+      - name: patch kernel probes (framebuffer markers in start.s)
+        run: python3 ci/patch-kernel-probes.py hakios/xnu-src/xnu-8796.121.2
+
       - name: build kernel
         run: |
           cd hakios
