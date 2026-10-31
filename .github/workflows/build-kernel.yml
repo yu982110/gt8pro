@@ -85,6 +85,9 @@ jobs:
       - name: patch kernel probes 2 (MMU window)
         run: python3 ci/patch-kernel-probes2.py hakios/xnu-src/xnu-8796.121.2
 
+      - name: patch kernel probes 3 (register dumps)
+        run: python3 ci/patch-kernel-probes3.py hakios/xnu-src/xnu-8796.121.2
+
       - name: build kernel
         run: |
           cd hakios
