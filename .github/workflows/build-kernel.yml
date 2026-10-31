@@ -85,8 +85,8 @@ jobs:
       - name: patch kernel probes 2 (MMU window)
         run: python3 ci/patch-kernel-probes2.py hakios/xnu-src/xnu-8796.121.2
 
-      - name: patch kernel print hook (registers via loader print)
-        run: python3 ci/patch-kernel-printhook.py hakios/xnu-src/xnu-8796.121.2
+      - name: patch kernel bars (self-contained register dump)
+        run: python3 ci/patch-kernel-bars.py hakios/xnu-src/xnu-8796.121.2
 
       - name: build kernel
         run: |
