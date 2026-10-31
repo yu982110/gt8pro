@@ -1,6 +1,7 @@
 name: build lafa kernel
 
 "on":
+  push:
   workflow_dispatch:
 
 jobs:
