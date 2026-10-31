@@ -32,16 +32,29 @@ jobs:
       - name: assemble boot.img (BootShim + FV + aston dtb)
         run: python3 ci/mkboot.py Mu-Silicium aston 0xA7100000 0x300000 boot-aston.img
 
+      # 把拼图单独拿出来：本地要试“不压缩的 PE + FV”等不同打包方式，不必每次都等 CI。
+      - name: collect parts
+        run: |
+          mkdir -p parts
+          cp Mu-Silicium/BootShim/BootShim.bin      parts/BootShim.bin
+          cp Mu-Silicium/BootShim/BootShim.elf      parts/BootShim.elf
+          cp Mu-Silicium/Resources/DTBs/aston.dtb   parts/aston.dtb
+          cp Mu-Silicium/Resources/ramdisk          parts/ramdisk
+          cp Mu-Silicium/Resources/Scripts/mkbootimg.py parts/mkbootimg.py
+          cp Mu-Silicium/Build/astonPkg/RELEASE_CLANGPDB/FV/SILICIUM_UEFI.fd parts/
+          ls -la parts/
+
       - name: show results
         run: |
           find Mu-Silicium/Build -maxdepth 5 -type f \( -name '*.fd' -o -name '*.img' \) -printf '%p  %s bytes\n' | head -20
           ls -la boot-aston.img
 
-      - name: upload UEFI + boot.img
+      - name: upload UEFI + boot.img + parts
         uses: actions/upload-artifact@v4
         with:
           name: uefi-aston
           path: |
             Mu-Silicium/Build/**/*.fd
             boot-aston.img
+            parts/*
           if-no-files-found: warn
