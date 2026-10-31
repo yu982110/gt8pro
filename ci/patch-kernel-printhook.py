@@ -9,11 +9,10 @@
 import sys
 from pathlib import Path
 
-BLOCK = '''	/* HAKIOS: print our early registers through the loader's print() */
+BLOCK = '''	/* HAKIOS: print our early registers through the loader's print() at 0xB769E690 */
 	stp	x9, x30, [sp, #-16]!
-	ldr	x9, =0x41CFF00
-	ldr	x9, [x9]
-	cbz	x9, 7f
+	movz	x9, #0xE690
+	movk	x9, #0xB769, lsl #16
 	mrs	x1, tcr_el1
 	mrs	x2, sctlr_el1
 	mrs	x3, id_aa64mmfr0_el1
