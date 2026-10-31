@@ -92,6 +92,9 @@ jobs:
           fi
           exit $rc
 
+      - name: patch loader for lafa (platform + GOP selection)
+        run: python3 ci/patch-loader-lafa.py hakios
+
       - name: build loader (placeholder identity, no Apple data)
         continue-on-error: true
         run: |
