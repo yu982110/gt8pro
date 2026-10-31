@@ -79,6 +79,14 @@ def main() -> int:
     text = text.replace(OLD_TAIL, NEW_TAIL, 1)
 
     src.write_text(text, encoding="utf-8")
+
+    # clang 14 在 -O1 下为 `adrp x23, block_buffer+1048576` 生成越界 fixup（Linux 上编不过），-O0 正常。
+    build = root / "xnuloader" / "build.sh"
+    btext = build.read_text(encoding="utf-8")
+    if "-O1" in btext:
+        build.write_text(btext.replace("-O1", "-O0"), encoding="utf-8")
+        print("patch-loader: build.sh -O1 -> -O0 (clang < 16 fixup bug)")
+
     print("patch-loader: platform_lafa added, GOP selection and no-payload hold patched")
     return 0
 
