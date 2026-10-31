@@ -43,7 +43,7 @@ LOOP = '''	mov	x11, #0
 
 
 def dump(reg, y):
-    fb = 0xFC800000 + y * 5760
+    fb = y * 5760          # 只是行偏移：framebuffer 基址由 movz x10 提供
     return f'''	/* HAKIOS BARS {reg} rows {y}/{y + 40} */
 	mrs	x9, {reg}
 	movz	x10, #0xFC80, lsl #16
