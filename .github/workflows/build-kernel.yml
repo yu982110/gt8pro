@@ -118,6 +118,9 @@ jobs:
       - name: patch kernel bsd checkpoints
         run: python3 ci/patch-kernel-bsd-ckpt.py hakios/xnu-src/xnu-8796.121.2
 
+      - name: patch kernel machine_startup checkpoints
+        run: python3 ci/patch-kernel-mstartup-ckpt.py hakios/xnu-src/xnu-8796.121.2
+
       - name: build kernel
         run: |
           cd hakios
