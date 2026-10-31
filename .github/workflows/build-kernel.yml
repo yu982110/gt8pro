@@ -63,6 +63,23 @@ jobs:
           [ -d xnu-src/xnu-8796.121.2 ] || xnu/apply.sh
           ls -d xnu-src/xnu-8796.121.2
 
+      # 只读：把 MMU 早期启动用到的常量写进日志（docs/MILESTONE-2026-11-01.md 的调查清单）
+      - name: "dump MMU constants (debug)"
+        run: |
+          cd hakios/xnu-src/xnu-8796.121.2
+          echo "=== SCTLR_EL1_DEFAULT ==="
+          grep -rn "SCTLR_EL1_DEFAULT" osfmk pexpert 2>/dev/null | head -5 || true
+          echo "=== sysreg_restore ==="
+          grep -rn "sysreg_restore" osfmk pexpert 2>/dev/null | head -20 || true
+          echo "=== SR_RESTORE_* ==="
+          grep -rn "SR_RESTORE_TCR_EL1\|SR_RESTORE_SCTLR\|SR_RESTORE_MAIR" osfmk/arm64/asm.h 2>/dev/null || true
+          echo "=== ARM_TT / PGBYTES ==="
+          grep -rn "ARM_TT_L2_SHIFT\|TTE_PGENTRIES\|ARM_PGBYTES\|ARM_PGSHIFT" pexpert/pexpert/arm64/*.h osfmk/arm64/*.h osfmk/arm/*.h 2>/dev/null | head -25 || true
+          echo "=== PAGE_SHIFT ==="
+          grep -rn "define PAGE_SHIFT\|define ARM_PGBYTES" osfmk pexpert 2>/dev/null | head -10 || true
+          echo "=== arm64 dir ==="
+          ls osfmk/arm64/ | head -40
+
       - name: host tools (xnu-deps/setup.sh)
         run: |
           cd hakios
