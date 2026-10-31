@@ -112,11 +112,8 @@ jobs:
       - name: patch kernel probes 2 (MMU window)
         run: python3 ci/patch-kernel-probes2.py hakios/xnu-src/xnu-8796.121.2
 
-      - name: patch kernel brk (exception round-trip)
-        run: python3 ci/patch-kernel-brk.py hakios/xnu-src/xnu-8796.121.2
-
-      - name: patch kernel keep early vbar
-        run: python3 ci/patch-kernel-keepvbar.py hakios/xnu-src/xnu-8796.121.2
+      - name: patch kernel startup checkpoints
+        run: python3 ci/patch-kernel-startup-ckpt.py hakios/xnu-src/xnu-8796.121.2
 
       - name: build kernel
         run: |
