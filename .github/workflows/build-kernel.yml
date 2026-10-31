@@ -112,8 +112,8 @@ jobs:
       - name: patch kernel probes 2 (MMU window)
         run: python3 ci/patch-kernel-probes2.py hakios/xnu-src/xnu-8796.121.2
 
-      - name: patch kernel mmu round-trip (decisive test)
-        run: python3 ci/patch-kernel-mmu-roundtrip.py hakios/xnu-src/xnu-8796.121.2
+      - name: patch kernel kva-read (decisive test)
+        run: python3 ci/patch-kernel-kva-read.py hakios/xnu-src/xnu-8796.121.2
 
       - name: build kernel
         run: |
