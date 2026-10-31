@@ -9,10 +9,11 @@
 import sys
 from pathlib import Path
 
-BLOCK = '''	/* HAKIOS: print our early registers through the loader's print() at 0xB769E690 */
+BLOCK = '''	/* HAKIOS: print our early registers through the loader's print(), whose address
+	 * the loader leaves in the boot_args page (x20 is that page's physical address). */
 	stp	x9, x30, [sp, #-16]!
-	movz	x9, #0xE690
-	movk	x9, #0xB769, lsl #16
+	ldr	x9, [x20, #0xF00]
+	cbz	x9, 7f
 	mrs	x1, tcr_el1
 	mrs	x2, sctlr_el1
 	mrs	x3, id_aa64mmfr0_el1
