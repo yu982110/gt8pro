@@ -1,19 +1,17 @@
 #!/usr/bin/env python3
-"""第二组内核探针（第 201 行），切细 common_start 到 MMU 打开这一段：
+"""第二组内核探针（第 201 行）——只用**唯一的注释行**做锚点，避免插进宏定义里。
 
-  P3  写完 TTBR1 之后            —— 白
-  P4  打开 MMU 之前（VBAR 已设） —— 黄
-  P5  打开 MMU 之后              —— 青
+  P3  设 MAIR 之前            —— 白
+  P4  打开 MMU 之前           —— 黄
 
-配合第一组（蓝=start_first_cpu、绿=common_start），就能判断是死在
-MAIR/TLBI、BCM2837 那段寄存器写、还是 MMU 打开本身。
+另外关掉 BCM2837 的树莓派中断路由（那是 Raspberry Pi 的寄存器，SM8850 上不该写）。
 
     python3 ci/patch-kernel-probes2.py <xnu 源码树>
 """
 import sys
 from pathlib import Path
 
-PROBE = '''	/* HAKIOS PROBE2 {idx}: framebuffer row 201, x = {x} */
+PROBE = '''	/* HAKIOS PROBE2 {idx} */
 	ldr	x9, =0xFC91AC00
 	add	x9, x9, #{off}
 	mov	w10, #{color}
@@ -23,15 +21,10 @@ PROBE = '''	/* HAKIOS PROBE2 {idx}: framebuffer row 201, x = {x} */
 	b.ne	2b
 '''
 
+# (锚点注释, 探针序号, 颜色, 偏移)
 ANCHORS = [
-    ("\tMSR_TTBR1_EL1_X0\n\n\t// Set up MAIR", "\tMSR_TTBR1_EL1_X0\n",
-     3, 0xFFFFFF, 0),          # 白：TTBR1 写完
-    ("\t// Enable caches, MMU, ROP and JOP\n\tMOV64   x0, SCTLR_EL1_DEFAULT",
-     "\t// Enable caches, MMU, ROP and JOP\n",
-     4, 0xFFFF00, 512),        # 黄：MMU 之前
-    ("\tMSR_SCTLR_EL1_X0\n\tisb\t\tsy\n",
-     "\tMSR_SCTLR_EL1_X0\n\tisb\t\tsy\n",
-     5, 0x00FFFF, 1024),       # 青：MMU 之后
+    ("\t// Set up MAIR attr0 for normal memory, attr1 for device memory\n", 3, 0xFFFFFF, 0),
+    ("\t// Enable caches, MMU, ROP and JOP\n", 4, 0xFFFF00, 512),
 ]
 
 
@@ -42,20 +35,26 @@ def main() -> int:
     if "HAKIOS PROBE2" in text:
         print("patch-probes2: already patched")
         return 0
-    for anchor, insert_after, idx, color, off in ANCHORS:
+
+    for anchor, idx, color, off in ANCHORS:
         if anchor not in text:
-            print(f"patch-probes2: anchor not found: {anchor[:40]!r}", file=sys.stderr)
+            print(f"patch-probes2: anchor not found: {anchor.strip()!r}", file=sys.stderr)
             return 1
-        probe = PROBE.format(idx=idx, x=off // 4, off=off, color=f"0x{color:06X}")
-        text = text.replace(anchor, insert_after + probe, 1)
-    # 修：关掉 BCM2837 的中断路由——那是树莓派的寄存器，SM8850 上不该写。
+        probe = PROBE.format(idx=idx, off=off, color=f"0x{color:06X}")
+        text = text.replace(anchor, probe + anchor, 1)
+
     bcm = "#if defined(BCM2837)\n\t// Setup timer interrupt routing; must be done before MMU is enabled"
     if bcm in text:
-        text = text.replace(bcm, "#if 0 /* HAKIOS: BCM2837 timer routing is a Raspberry Pi register, not for lafa */\n\t// Setup timer interrupt routing; must be done before MMU is enabled", 1)
+        text = text.replace(
+            bcm,
+            "#if 0 /* HAKIOS: BCM2837 timer routing is a Raspberry Pi register, not for lafa */\n"
+            "\t// Setup timer interrupt routing; must be done before MMU is enabled",
+            1,
+        )
         print("patch-probes2: BCM2837 timer routing disabled")
 
     src.write_text(text, encoding="utf-8")
-    print("patch-probes2: P3/P4/P5 inserted (row 201: white / yellow / cyan)")
+    print("patch-probes2: P3/P4 inserted (row 201: white / yellow)")
     return 0
 
 
