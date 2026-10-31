@@ -62,7 +62,7 @@ def main() -> int:
     ktext = add_decl(ktext).replace(KB_OLD, KB_NEW, 1)
     kb.write_text(ktext, encoding="utf-8")
 
-    print("patch-mstartup: 45/46/47 inserted")
+    print("patch-mstartup: MR=%s KB=%s MS49=%s" % (MR_OLD not in mtext, KB_OLD not in ktext, "49" in mtext))
     return 0
 
 
