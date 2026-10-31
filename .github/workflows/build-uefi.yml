@@ -10,6 +10,9 @@ jobs:
     timeout-minutes: 240
 
     steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
       - name: clone Mu-Silicium (recursive, ~5 GB)
         run: git clone --recursive --depth 1 https://github.com/Project-Silicium/Mu-Silicium.git
 
@@ -26,15 +29,19 @@ jobs:
         working-directory: Mu-Silicium
         run: python3 build_uefi.py -d aston
 
-      - name: show results
-        working-directory: Mu-Silicium
-        run: find Build -maxdepth 5 -type f \( -name '*.fd' -o -name '*.img' \) -printf '%p  %s bytes\n' | head -20
+      - name: assemble boot.img (BootShim + FV + aston dtb)
+        run: python3 ci/mkboot.py Mu-Silicium aston 0xA7100000 0x300000 boot-aston.img
 
-      - name: upload UEFI
+      - name: show results
+        run: |
+          find Mu-Silicium/Build -maxdepth 5 -type f \( -name '*.fd' -o -name '*.img' \) -printf '%p  %s bytes\n' | head -20
+          ls -la boot-aston.img
+
+      - name: upload UEFI + boot.img
         uses: actions/upload-artifact@v4
         with:
           name: uefi-aston
           path: |
             Mu-Silicium/Build/**/*.fd
-            Mu-Silicium/Build/**/*.img
+            boot-aston.img
           if-no-files-found: warn
