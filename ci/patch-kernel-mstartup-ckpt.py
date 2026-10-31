@@ -22,6 +22,11 @@ MR_NEW = ("\t/* HAKIOS MSTARTUP CKPT */\n"
 KB_OLD = '\tkernel_bootstrap_log("vm_mem_bootstrap");\n'
 KB_NEW = '\tloader_checkpoint(47);\n' + KB_OLD
 
+# 函数体第一行（HAS_IPI 块之前）
+MS_OLD = "machine_startup(__unused boot_args * args)\n{\n"
+MS_NEW = ("machine_startup(__unused boot_args * args)\n{\n"
+          "\tloader_checkpoint(49); /* HAKIOS MSTARTUP CKPT: first line */\n")
+
 
 def add_decl(text: str) -> str:
     if DECL in text:
@@ -44,6 +49,10 @@ def main() -> int:
         print("patch-mstartup: machine_startup anchor not found", file=sys.stderr)
         return 1
     mtext = add_decl(mtext).replace(MR_OLD, MR_NEW, 1)
+    if MS_OLD in mtext:
+        mtext = mtext.replace(MS_OLD, MS_NEW, 1)
+    else:
+        print("patch-mstartup: machine_startup body anchor not found", file=sys.stderr)
     mr.write_text(mtext, encoding="utf-8")
 
     ktext = kb.read_text(encoding="utf-8")
