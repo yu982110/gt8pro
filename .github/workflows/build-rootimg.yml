@@ -44,7 +44,18 @@ jobs:
           EOF
           clang --target=arm64-apple-macos11 -nostdlib -static -fuse-ld=lld \
                 -Wl,-e,_start -Wl,-platform_version,macos,11.0,11.0 \
-                -O2 -o /tmp/launchd /tmp/lafd.c
+                -O2 -o /tmp/dyld-stub /tmp/lafd.c
+
+          # /sbin/launchd: a dynamic Mach-O that names /usr/lib/dyld as its dylinker, so the
+          # kernel takes its normal exec path and then jumps into whatever we put there.
+          cat > /tmp/launchd.c <<'EOF'
+          void start(void) { for (;;) { __asm__ volatile("wfi"); } }
+          EOF
+          clang --target=arm64-apple-macos11 -nostdlib -fuse-ld=lld \
+                -Wl,-dylinker,/usr/lib/dyld -Wl,-e,_start \
+                -Wl,-platform_version,macos,11.0,11.0 \
+                -O2 -o /tmp/launchd /tmp/launchd.c
+          file /tmp/dyld-stub /tmp/launchd
           file /tmp/launchd || true
           ls -la /tmp/launchd
 
@@ -60,7 +71,9 @@ jobs:
           hmkdir :etc
           hmkdir :usr
           hmkdir :usr:libexec
+          hmkdir :usr:lib
           hcopy /tmp/launchd :sbin:launchd
+          hcopy /tmp/dyld-stub :usr:lib:dyld
           hls -l :sbin
           humount
           ls -la root-hfs.img
