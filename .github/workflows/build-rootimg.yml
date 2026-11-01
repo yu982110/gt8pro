@@ -48,18 +48,21 @@ jobs:
           file /tmp/launchd || true
           ls -la /tmp/launchd
 
-      - name: make the HFS+ root image with /sbin/launchd
+      - name: make the HFS root image with /sbin/launchd
         run: |
           set -euo pipefail
+          sudo apt-get install -y -qq hfsutils
           dd if=/dev/zero of=root-hfs.img bs=1M count=24 status=none
-          mkfs.hfsplus -v lafa root-hfs.img
-          mkdir -p /tmp/mnt
-          sudo mount -o loop root-hfs.img /tmp/mnt
-          sudo mkdir -p /tmp/mnt/sbin /tmp/mnt/dev /tmp/mnt/etc /tmp/mnt/usr/libexec
-          sudo cp /tmp/launchd /tmp/mnt/sbin/launchd
-          sudo chmod 755 /tmp/mnt/sbin/launchd
-          sync
-          sudo umount /tmp/mnt
+          hformat -l lafa root-hfs.img
+          hmount root-hfs.img
+          hmkdir :sbin
+          hmkdir :dev
+          hmkdir :etc
+          hmkdir :usr
+          hmkdir :usr:libexec
+          hcopy /tmp/launchd :sbin:launchd
+          hls -l :sbin
+          humount
           ls -la root-hfs.img
 
       - name: upload
