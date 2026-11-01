@@ -46,17 +46,24 @@ jobs:
                 -Wl,-e,_start -Wl,-platform_version,macos,11.0,11.0 \
                 -O2 -o /tmp/dyld-stub /tmp/lafd.c
 
-          # /sbin/launchd: a dynamic Mach-O that names /usr/lib/dyld as its dylinker, so the
-          # kernel takes its normal exec path and then jumps into whatever we put there.
+          # /sbin/launchd: link against a dummy dylib so lld emits LC_LOAD_DYLINKER=/usr/lib/dyld.
+          # The kernel then takes its normal exec path and jumps into our /usr/lib/dyld stub.
+          cat > /tmp/empty.c <<'EOF'
+          int dummy_symbol(void) { return 0; }
+          EOF
+          clang --target=arm64-apple-macos11 -nostdlib -fuse-ld=lld -dynamiclib \
+                -Wl,-platform_version,macos,11.0,11.0 \
+                -o /tmp/libSystem.dylib /tmp/empty.c
+
           cat > /tmp/launchd.c <<'EOF'
-          void start(void) { for (;;) { __asm__ volatile("wfi"); } }
+          extern int dummy_symbol(void);
+          void start(void) { dummy_symbol(); for (;;) { __asm__ volatile("wfi"); } }
           EOF
           clang --target=arm64-apple-macos11 -nostdlib -fuse-ld=lld \
-                -Wl,-dylinker,/usr/lib/dyld -Wl,-e,_start \
+                -L/tmp -lSystem -Wl,-undefined,dynamic_lookup -Wl,-e,_start \
                 -Wl,-platform_version,macos,11.0,11.0 \
                 -O2 -o /tmp/launchd /tmp/launchd.c
-          file /tmp/dyld-stub /tmp/launchd
-          file /tmp/launchd || true
+          file /tmp/dyld-stub /tmp/launchd /tmp/libSystem.dylib
           ls -la /tmp/launchd
 
       - name: make the HFS root image with /sbin/launchd
