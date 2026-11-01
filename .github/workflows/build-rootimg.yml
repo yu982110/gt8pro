@@ -94,8 +94,8 @@ jobs:
           hmkdir :usr
           hmkdir :usr:libexec
           hmkdir :usr:lib
-          hcopy /tmp/launchd :sbin:launchd
-          hcopy /tmp/dyld-stub :usr:lib:dyld
+          hcopy -b /tmp/launchd :sbin:launchd
+          hcopy -b /tmp/dyld-stub :usr:lib:dyld
           hls -l :sbin
           humount
           ls -la root-hfs.img
