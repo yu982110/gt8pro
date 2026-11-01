@@ -18,7 +18,7 @@ LR_HELPER = """/* HAKIOS-LAFA: draw kernel output on the panel (the port has no 
 #include <console/video_console.h>
 extern void vcputc(char c);
 extern struct vc_info vinfo;
-static inline int
+int
 lafa_vc_ready(void)
 {
 \treturn vinfo.v_baseaddr != 0;
@@ -41,11 +41,11 @@ CW_ANCHOR = """\tdev = cndev();
 CW_NEW = """\t/* HAKIOS-LAFA: what user space writes to /dev/console goes to the panel */
 \t{
 \t\textern void vcputc(char);
-\t\textern struct vc_info vinfo;
+\t\textern int lafa_vc_ready(void);
 \t\tchar buf[256];
 \t\tint n = (int)uio_resid(uio);
 
-\t\tif (vinfo.v_baseaddr == 0) {
+\t\tif (!lafa_vc_ready()) {
 \t\t\treturn 0;
 \t\t}
 \t\twhile (n > 0) {
