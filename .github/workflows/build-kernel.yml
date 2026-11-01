@@ -121,6 +121,9 @@ jobs:
       - name: patch kernel bsd2 checkpoints
         run: python3 ci/patch-kernel-bsd2-ckpt.py hakios/xnu-src/xnu-8796.121.2
 
+      - name: patch kernel exec trace
+        run: python3 ci/patch-kernel-proctrace.py hakios/xnu-src/xnu-8796.121.2
+
       - name: build kernel
         run: |
           cd hakios
