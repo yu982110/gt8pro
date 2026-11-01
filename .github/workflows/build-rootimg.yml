@@ -46,6 +46,21 @@ jobs:
                 -Wl,-e,_start -Wl,-platform_version,macos,11.0,11.0 \
                 -O2 -o /tmp/dyld-stub /tmp/lafd.c
 
+          # XNU's load_dylinker wants filetype MH_DYLINKER (7); lld made MH_EXECUTE (2).
+          # The field is a little-endian uint32 at Mach-O offset 12.
+          python3 - <<'PY'
+          import struct
+          p = "/tmp/dyld-stub"
+          d = bytearray(open(p, "rb").read())
+          magic, = struct.unpack_from("<I", d, 0)
+          assert magic == 0xfeedfacf, hex(magic)
+          ft, = struct.unpack_from("<I", d, 12)
+          print("filetype before:", ft)
+          struct.pack_into("<I", d, 12, 7)      # MH_DYLINKER
+          open(p, "wb").write(d)
+          print("filetype after:", struct.unpack_from("<I", d, 12)[0])
+          PY
+
           # /sbin/launchd: link against a dummy dylib so lld emits LC_LOAD_DYLINKER=/usr/lib/dyld.
           # The kernel then takes its normal exec path and jumps into our /usr/lib/dyld stub.
           cat > /tmp/empty.c <<'EOF'
