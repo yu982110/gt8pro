@@ -24,12 +24,24 @@ lafa_vc_ready(void)
 \treturn vinfo.v_baseaddr != 0;
 }
 
+/* vcputc may kprintf on its way (a bad vc_info, a scroll): one character at a time, no recursion */
+static volatile int lafa_vc_busy;
+
+static void
+lafa_vc_put(char c)
+{
+\tif (lafa_vc_busy || !lafa_vc_ready()) {
+\t\treturn;
+\t}
+\tlafa_vc_busy = 1;
+\tvcputc(c);
+\tlafa_vc_busy = 0;
+}
+
 static void
 loader_log_put_locked(char c)
 {
-\tif (lafa_vc_ready()) {
-\t\tvcputc(c);
-\t}
+\tlafa_vc_put(c);
 """
 
 # --- 2) 用户态写 /dev/console：bsd/dev/arm/cons.c 的 cnwrite ---------------------------------
