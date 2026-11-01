@@ -42,7 +42,7 @@ jobs:
           	}
           }
           EOF
-          clang --target=arm64-apple-macos11 -nostdlib -fuse-ld=lld \
+          clang --target=arm64-apple-macos11 -nostdlib -static -fuse-ld=lld \
                 -Wl,-e,_start -Wl,-platform_version,macos,11.0,11.0 \
                 -O2 -o /tmp/launchd /tmp/lafd.c
           file /tmp/launchd || true
