@@ -106,12 +106,6 @@ jobs:
           fi
           exit $rc
 
-      - name: patch kernel probes (framebuffer markers in start.s)
-        run: python3 ci/patch-kernel-probes.py hakios/xnu-src/xnu-8796.121.2
-
-      - name: patch kernel probes 2 (MMU window)
-        run: python3 ci/patch-kernel-probes2.py hakios/xnu-src/xnu-8796.121.2
-
       - name: patch kernel startup checkpoints
         run: python3 ci/patch-kernel-startup-ckpt.py hakios/xnu-src/xnu-8796.121.2
 
