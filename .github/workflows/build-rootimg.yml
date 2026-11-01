@@ -33,7 +33,7 @@ jobs:
           	__asm__ volatile("svc #0x80" : "+r"(x0) : "r"(x16), "r"(x1), "r"(x2) : "memory");
           	return x0;
           }
-          void _start(void)
+          void start(void)
           {
           	static const char msg[] = "\nlafd: hello from userspace on lafa\n";
           	sys_write(2, msg, sizeof(msg) - 1);
@@ -42,7 +42,7 @@ jobs:
           	}
           }
           EOF
-          clang --target=arm64-apple-macos11 -nostdlib -static -fuse-ld=lld \
+          clang --target=arm64-apple-macos11 -nostdlib -fuse-ld=lld \
                 -Wl,-e,_start -Wl,-platform_version,macos,11.0,11.0 \
                 -O2 -o /tmp/launchd /tmp/lafd.c
           file /tmp/launchd || true
