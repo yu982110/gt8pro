@@ -42,8 +42,8 @@ jobs:
           	}
           }
           EOF
-          clang --target=arm64-apple-macos11 -nostdlib -static -fuse-ld=lld \
-                -Wl,-e,_start -Wl,-platform_version,macos,11.0,11.0 \
+          clang --target=arm64-apple-ios16 -nostdlib -static -fuse-ld=lld \
+                -Wl,-e,_start -Wl,-platform_version,ios,16.0,16.0 \
                 -O2 -o /tmp/dyld-stub /tmp/lafd.c
 
           # XNU's load_dylinker wants filetype MH_DYLINKER (7); lld made MH_EXECUTE (2).
@@ -66,17 +66,17 @@ jobs:
           cat > /tmp/empty.c <<'EOF'
           int dummy_symbol(void) { return 0; }
           EOF
-          clang --target=arm64-apple-macos11 -nostdlib -fuse-ld=lld -dynamiclib \
-                -Wl,-platform_version,macos,11.0,11.0 \
+          clang --target=arm64-apple-ios16 -nostdlib -fuse-ld=lld -dynamiclib \
+                -Wl,-platform_version,ios,16.0,16.0 \
                 -o /tmp/libSystem.dylib /tmp/empty.c
 
           cat > /tmp/launchd.c <<'EOF'
           extern int dummy_symbol(void);
           void start(void) { dummy_symbol(); for (;;) { __asm__ volatile("wfi"); } }
           EOF
-          clang --target=arm64-apple-macos11 -nostdlib -fuse-ld=lld \
+          clang --target=arm64-apple-ios16 -nostdlib -fuse-ld=lld \
                 -L/tmp -lSystem -Wl,-undefined,dynamic_lookup -Wl,-e,_start \
-                -Wl,-platform_version,macos,11.0,11.0 \
+                -Wl,-platform_version,ios,16.0,16.0 \
                 -O2 -o /tmp/launchd /tmp/launchd.c
           file /tmp/dyld-stub /tmp/launchd /tmp/libSystem.dylib
           ls -la /tmp/launchd
