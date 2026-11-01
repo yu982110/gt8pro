@@ -127,6 +127,9 @@ jobs:
       - name: patch kernel console (vcputc)
         run: python3 ci/patch-kernel-console.py hakios/xnu-src/xnu-8796.121.2
 
+      - name: patch kernel mount trace
+        run: python3 ci/patch-kernel-mounttrace.py hakios/xnu-src/xnu-8796.121.2
+
       - name: build kernel
         run: |
           cd hakios
