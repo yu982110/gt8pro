@@ -1,0 +1,69 @@
+name: build lafa root image
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "ci/mkrootimg.sh"
+      - ".github/workflows/build-rootimg.yml"
+
+jobs:
+  rootimg:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: system packages
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq hfsprogs clang lld
+
+      - name: build a tiny /sbin/launchd (Mach-O arm64, raw syscalls)
+        run: |
+          set -euo pipefail
+          cat > /tmp/lafd.c <<'EOF'
+          /* hakios lafa: a stand-in launchd.  Writes one line to stderr (fd 2) with a
+           * raw Darwin syscall and never returns, so XNU's exec path is exercised. */
+          static long sys_write(int fd, const void *buf, unsigned long n)
+          {
+          	register long x16 __asm__("x16") = 4;      /* SYS_write */
+          	register long x0 __asm__("x0") = fd;
+          	register long x1 __asm__("x1") = (long)buf;
+          	register long x2 __asm__("x2") = (long)n;
+          	__asm__ volatile("svc #0x80" : "+r"(x0) : "r"(x16), "r"(x1), "r"(x2) : "memory");
+          	return x0;
+          }
+          void _start(void)
+          {
+          	static const char msg[] = "\nlafd: hello from userspace on lafa\n";
+          	sys_write(2, msg, sizeof(msg) - 1);
+          	for (;;) {
+          		__asm__ volatile("wfi");
+          	}
+          }
+          EOF
+          clang --target=arm64-apple-macos11 -nostdlib -static -fuse-ld=lld \
+                -Wl,-e,_start -Wl,-platform_version,macos,11.0,11.0 \
+                -O2 -o /tmp/launchd /tmp/lafd.c
+          file /tmp/launchd || true
+          ls -la /tmp/launchd
+
+      - name: make the HFS+ root image with /sbin/launchd
+        run: |
+          set -euo pipefail
+          dd if=/dev/zero of=root-hfs.img bs=1M count=24 status=none
+          mkfs.hfsplus -v lafa root-hfs.img
+          mkdir -p /tmp/mnt
+          sudo mount -o loop root-hfs.img /tmp/mnt
+          sudo mkdir -p /tmp/mnt/sbin /tmp/mnt/dev /tmp/mnt/etc /tmp/mnt/usr/libexec
+          sudo cp /tmp/launchd /tmp/mnt/sbin/launchd
+          sudo chmod 755 /tmp/mnt/sbin/launchd
+          sync
+          sudo umount /tmp/mnt
+          ls -la root-hfs.img
+
+      - name: upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: lafa-rootimg
+          path: root-hfs.img
