@@ -12,40 +12,32 @@ from pathlib import Path
 
 FB_FUNC = r'''
 /*
- * HAKIOS-LAFA: the kernel's own video console drives the panel. The bootloader left a framebuffer at
- * v_baseAddr and xnu maps it itself when the low bit says "this is a physical address"; writing to it
- * through ml_io_map() faulted, so this is the path that uses (the same one the arm ports take).
+ * HAKIOS-LAFA: the kernel's virtual and physical addresses differ by a fixed slide, so a physical
+ * framebuffer the kernel maps as RAM can be written with no new mapping at all (ml_static_ptovirt is
+ * what the resident image is reached through too). ml_io_map() and the video console's own mapping
+ * both faulted on this port.
  */
-#include <console/video_console.h>
-
-static void
-lafa_fb_putline(const char *s)
-{
-	for (; *s != 0; s++) {
-		vcputc(*s);
-	}
-	vcputc('\n');
-}
-
 void
 lafa_fb_fill(void)
 {
 	Boot_Video *v = &PE_state.video;
+	uint64_t n, i;
+	uint32_t *p, stride;
 
 	if (v->v_baseAddr == 0 || v->v_rowBytes == 0 || v->v_height == 0) {
 		printf("lafa-fb: no framebuffer (%x %x %x)\n", (uint64_t)v->v_baseAddr,
 		    (uint64_t)v->v_rowBytes, (uint64_t)v->v_height);
 		return;
 	}
-	printf("lafa-fb: base %x row %x height %x depth %x\n", (uint64_t)v->v_baseAddr,
-	    (uint64_t)v->v_rowBytes, (uint64_t)v->v_height, (uint64_t)v->v_depth);
-	v->v_baseAddr |= 1;             /* "the address is physical: map it" */
-	initialize_screen(NULL, v);
-	printf("lafa-fb: initialize_screen returned\n");
-	lafa_fb_putline("hAKiOS lafa: the kernel drew this");
-	lafa_fb_putline("SM8850 / realme GT8 Pro");
-	lafa_fb_putline("framebuffer mapped by the kernel video console");
-	printf("lafa-fb: text drawn\n");
+	n = (uint64_t)v->v_rowBytes * (uint64_t)v->v_height;
+	p = (uint32_t *)(uintptr_t)ml_static_ptovirt((uintptr_t)v->v_baseAddr);
+	stride = v->v_rowBytes / 4;
+	printf("lafa-fb: base %x -> %x, %x bytes\n", (uint64_t)v->v_baseAddr, (uint64_t)p, n);
+	for (i = 0; i < n / 4; i++) {
+		uint32_t x = (uint32_t)(i % stride), y = (uint32_t)(i / stride);
+		p[i] = 0xff000000u | ((x * 255u / stride) << 16) | ((y * 255u / v->v_height) << 8) | 0x40u;
+	}
+	printf("lafa-fb: filled\n");
 }
 '''
 
