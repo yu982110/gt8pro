@@ -19,13 +19,12 @@ FB_FUNC = r'''
 #include <console/video_console.h>
 
 static void
-lafa_fb_putline(int line, const char *s)
+lafa_fb_putline(const char *s)
 {
-	int col = 0;
-
 	for (; *s != 0; s++) {
-		(void)vcputc(line, col++, *s);
+		vcputc(*s);
 	}
+	vcputc('\n');
 }
 
 void
@@ -43,9 +42,9 @@ lafa_fb_fill(void)
 	v->v_baseAddr |= 1;             /* "the address is physical: map it" */
 	initialize_screen(NULL, v);
 	printf("lafa-fb: initialize_screen returned\n");
-	lafa_fb_putline(1, "hAKiOS lafa: the kernel drew this");
-	lafa_fb_putline(3, "SM8850 / realme GT8 Pro");
-	lafa_fb_putline(5, "framebuffer mapped by the kernel's video console");
+	lafa_fb_putline("hAKiOS lafa: the kernel drew this");
+	lafa_fb_putline("SM8850 / realme GT8 Pro");
+	lafa_fb_putline("framebuffer mapped by the kernel video console");
 	printf("lafa-fb: text drawn\n");
 }
 '''
