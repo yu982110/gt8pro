@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""追踪 pid 1（launchd）的系统调用：失败时打调用号和错误码。
+"""追踪 pid 1（launchd）的系统调用：失败时打调用号和错误码；sysctl 还打 MIB。
 
-用于定位 libignition 的 "failed to query hardware target: 22" 到底走了哪个系统调用。
+用于定位 libignition 的 "failed to query hardware target: 22" 到底查的是哪个 sysctl。
 
     python3 ci/patch-kernel-systrace.py <xnu 源码树>
 """
@@ -13,7 +13,21 @@ ANCHOR = "\terror = (*(callp->sy_call))(proc, &uthread->uu_arg[0], &(uthread->uu
 INSERT = ANCHOR + """
 \t/* HAKIOS-LAFA: what the first user-space program asks for, and what it gets back */
 \tif (error != 0 && proc_getpid(proc) == 1) {
-\t\tprintf("lafa-sys: pid 1 code %d -> %d\\n", code, error);
+\t\tif (code == 202) {              /* sysctl: say which one */
+\t\t\tint mib[4] = { -1, -1, -1, -1 };
+\t\t\tu_int n = (u_int)uthread->uu_arg[1];
+\t\t\tif (n > 4) {
+\t\t\t\tn = 4;
+\t\t\t}
+\t\t\tif (n > 0 && copyin((user_addr_t)uthread->uu_arg[0], mib, n * sizeof(int)) == 0) {
+\t\t\t\tprintf("lafa-sys: pid 1 sysctl %d.%d.%d.%d -> %d\\n",
+\t\t\t\t    mib[0], mib[1], mib[2], mib[3], error);
+\t\t\t} else {
+\t\t\t\tprintf("lafa-sys: pid 1 sysctl (mib unreadable) -> %d\\n", error);
+\t\t\t}
+\t\t} else {
+\t\t\tprintf("lafa-sys: pid 1 code %d -> %d\\n", code, error);
+\t\t}
 \t}
 """
 
