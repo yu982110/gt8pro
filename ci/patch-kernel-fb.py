@@ -27,6 +27,18 @@ lafa_fb_fill(void)
 		return;
 	}
 	n = (uint64_t)v->v_rowBytes * (uint64_t)v->v_height;
+	printf("lafa-fb: base %x row %x height %x, %x bytes\n", (uint64_t)v->v_baseAddr,
+	    (uint64_t)v->v_rowBytes, (uint64_t)v->v_height, n);
+	/* TEST: one page first: is the mapping usable at all? */
+	kva = (vm_offset_t)ml_io_map((vm_offset_t)v->v_baseAddr, 4096);
+	printf("lafa-fb: one page -> %x\n", (uint64_t)kva);
+	if (kva == 0) {
+		return;
+	}
+	((uint32_t *)kva)[0] = 0xffff0000u;
+	((uint32_t *)kva)[1] = 0xff00ff00u;
+	printf("lafa-fb: one page written\n");
+	return;
 	kva = (vm_offset_t)ml_io_map((vm_offset_t)v->v_baseAddr, (vm_size_t)n);
 	if (kva == 0) {
 		printf("lafa-fb: ml_io_map(%x, %x) failed\n", (uint64_t)v->v_baseAddr, n);
