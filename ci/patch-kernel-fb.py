@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
-"""内核自己画屏：把 bootloader 的 framebuffer 映射成设备内存并填满渐变色。
+"""内核自己画屏（方案 B）：让 xnu 自带的 video console 去映射 framebuffer 并写字。
 
-第一次由内核（而不是 loader）控制屏幕。
+之前用 ml_io_map 直接映射 0xFC800000 写像素会 data abort（1 页也崩），
+这里改成 xnu 原生的路径：把 v_baseAddr 标成"物理地址"（bit0），
+让 initialize_screen() 自己映射，然后用 vcputc() 写字。
 
     python3 ci/patch-kernel-fb.py <xnu 源码树>
 """
@@ -10,48 +12,42 @@ from pathlib import Path
 
 FB_FUNC = r'''
 /*
- * HAKIOS-LAFA: the panel is already on (the bootloader left a framebuffer at v_baseAddr); this maps
- * it as device memory and fills it, so what is on the screen comes from the kernel itself.
+ * HAKIOS-LAFA: the kernel's own video console drives the panel. The bootloader left a framebuffer at
+ * v_baseAddr and xnu maps it itself when the low bit says "this is a physical address"; writing to it
+ * through ml_io_map() faulted, so this is the path that uses (the same one the arm ports take).
  */
+extern void initialize_screen(void *boot_args, struct Boot_Video *video);
+extern int vcputc(int line, int column, char c);
+
+static void
+lafa_fb_putline(int line, const char *s)
+{
+	int col = 0;
+
+	for (; *s != 0; s++) {
+		(void)vcputc(line, col++, *s);
+	}
+}
+
 void
 lafa_fb_fill(void)
 {
 	Boot_Video *v = &PE_state.video;
-	uint64_t n, i;
-	uint32_t *p;
-	vm_offset_t kva;
 
 	if (v->v_baseAddr == 0 || v->v_rowBytes == 0 || v->v_height == 0) {
 		printf("lafa-fb: no framebuffer (%x %x %x)\n", (uint64_t)v->v_baseAddr,
 		    (uint64_t)v->v_rowBytes, (uint64_t)v->v_height);
 		return;
 	}
-	n = (uint64_t)v->v_rowBytes * (uint64_t)v->v_height;
-	printf("lafa-fb: base %x row %x height %x, %x bytes\n", (uint64_t)v->v_baseAddr,
-	    (uint64_t)v->v_rowBytes, (uint64_t)v->v_height, n);
-	/* TEST: one page first: is the mapping usable at all? */
-	kva = (vm_offset_t)ml_io_map((vm_offset_t)v->v_baseAddr, 4096);
-	printf("lafa-fb: one page -> %x\n", (uint64_t)kva);
-	if (kva == 0) {
-		return;
-	}
-	((uint32_t *)kva)[0] = 0xffff0000u;
-	((uint32_t *)kva)[1] = 0xff00ff00u;
-	printf("lafa-fb: one page written\n");
-	return;
-	kva = (vm_offset_t)ml_io_map((vm_offset_t)v->v_baseAddr, (vm_size_t)n);
-	if (kva == 0) {
-		printf("lafa-fb: ml_io_map(%x, %x) failed\n", (uint64_t)v->v_baseAddr, n);
-		return;
-	}
-	p = (uint32_t *)kva;
-	for (i = 0; i < n / 4; i++) {
-		uint32_t x = (uint32_t)(i % (v->v_rowBytes / 4)), y = (uint32_t)(i / (v->v_rowBytes / 4));
-		p[i] = 0xff000000u | ((x * 255u / (v->v_rowBytes / 4 ? v->v_rowBytes / 4 : 1)) << 16) |
-		    ((y * 255u / (v->v_height ? v->v_height : 1)) << 8) | 0x40u;
-	}
-	printf("lafa-fb: %d x %d, %d bytes at %x mapped and filled\n", (uint64_t)v->v_width,
-	    (uint64_t)v->v_height, n, (uint64_t)v->v_baseAddr);
+	printf("lafa-fb: base %x row %x height %x depth %x\n", (uint64_t)v->v_baseAddr,
+	    (uint64_t)v->v_rowBytes, (uint64_t)v->v_height, (uint64_t)v->v_depth);
+	v->v_baseAddr |= 1;             /* "the address is physical: map it" */
+	initialize_screen(NULL, v);
+	printf("lafa-fb: initialize_screen returned\n");
+	lafa_fb_putline(1, "hAKiOS lafa: the kernel drew this");
+	lafa_fb_putline(3, "SM8850 / realme GT8 Pro");
+	lafa_fb_putline(5, "framebuffer mapped by the kernel's video console");
+	printf("lafa-fb: text drawn\n");
 }
 '''
 
@@ -72,7 +68,6 @@ def main() -> int:
     if "lafa_fb_fill" in text:
         print("patch-fb: loader_return.c already patched")
     else:
-        # needs the video struct and ml_io_map
         text = text.replace('#include <pexpert/pexpert.h>',
                             '#include <pexpert/pexpert.h>\n#include <pexpert/boot.h>', 1)
         if "#include <pexpert/boot.h>" not in text:
@@ -88,11 +83,10 @@ def main() -> int:
         print("patch-fb: bsd_init anchor not found", file=sys.stderr)
         return 1
     b = b.replace(ANCHOR_BSD, CALL, 1)
-    # declaration near the other externs
     b = b.replace("void bsd_utaskbootstrap(void);",
                   "void bsd_utaskbootstrap(void);\nextern void lafa_fb_fill(void);", 1)
     bi.write_text(b, encoding="utf-8", errors="surrogateescape")
-    print("patch-fb: kernel framebuffer fill inserted")
+    print("patch-fb: kernel video console path inserted")
     return 0
 
 
