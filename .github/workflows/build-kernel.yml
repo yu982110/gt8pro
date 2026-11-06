@@ -136,6 +136,9 @@ jobs:
       - name: patch kernel syscall trace
         run: python3 ci/patch-kernel-systrace.py hakios/xnu-src/xnu-8796.121.2
 
+      - name: patch kernel hw.target fallback
+        run: python3 ci/patch-kernel-hwtarget.py hakios/xnu-src/xnu-8796.121.2
+
       - name: build kernel
         run: |
           cd hakios
