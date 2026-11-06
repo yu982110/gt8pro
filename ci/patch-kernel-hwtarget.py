@@ -5,8 +5,7 @@
 内核的平台探测搞坏）。libignition 在放 launchd 之前要 sysctl hw.target，查不到就返回 EINVAL 并把
 pid 1 杀掉。这里让内核在 PEGetTargetName 失败时读 boot-arg：
 
-    hw_target=D22AP
-    hw_product=iPhone10,3
+    (values are fixed in the code: D22AP / iPhone10,3)
 
     python3 ci/patch-kernel-hwtarget.py <xnu 源码树>
 """
@@ -25,9 +24,8 @@ TARGET_NEW = """	case HW_TARGET:
 		if (!PEGetTargetName(dummy, 64)) {
 			/* HAKIOS-LAFA: no platform identity in this port's device tree; the boot argument
 			 * says which phone the userland is from (libignition asks for hw.target) */
-			if (!PE_parse_boot_argn("hw_target", dummy, sizeof(dummy))) {
-				return EINVAL;
-			}
+			/* this port has no platform identity at all: the userland is the iPhone X (D22AP) */
+			strlcpy(dummy, "D22AP", 64);
 		}
 """
 
@@ -42,9 +40,7 @@ PRODUCT_NEW = """	case HW_PRODUCT:
 		bzero(dummy, sizeof(dummy));
 		if (!PEGetProductName(dummy, 64)) {
 			/* HAKIOS-LAFA: same fallback as hw.target above */
-			if (!PE_parse_boot_argn("hw_product", dummy, sizeof(dummy))) {
-				return EINVAL;
-			}
+			strlcpy(dummy, "iPhone10,3", 64);
 		}
 """
 
@@ -53,7 +49,7 @@ def main() -> int:
     root = Path(sys.argv[1] if len(sys.argv) > 1 else "xnu")
     src = root / "bsd" / "kern" / "kern_mib.c"
     text = src.read_text(encoding="utf-8", errors="surrogateescape")
-    if "hw_target" in text:
+    if "D22AP" in text:
         print("patch-hwtarget: already patched")
         return 0
     for old, new, what in ((TARGET_ANCHOR, TARGET_NEW, "hw.target"),
