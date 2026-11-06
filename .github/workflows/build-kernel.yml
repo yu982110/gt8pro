@@ -133,6 +133,9 @@ jobs:
       - name: patch kernel md trace
         run: python3 ci/patch-kernel-mdtrace.py hakios/xnu-src/xnu-8796.121.2
 
+      - name: patch kernel syscall trace
+        run: python3 ci/patch-kernel-systrace.py hakios/xnu-src/xnu-8796.121.2
+
       - name: build kernel
         run: |
           cd hakios
