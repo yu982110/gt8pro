@@ -16,8 +16,7 @@ FB_FUNC = r'''
  * v_baseAddr and xnu maps it itself when the low bit says "this is a physical address"; writing to it
  * through ml_io_map() faulted, so this is the path that uses (the same one the arm ports take).
  */
-extern void initialize_screen(void *boot_args, struct Boot_Video *video);
-extern int vcputc(int line, int column, char c);
+#include <console/video_console.h>
 
 static void
 lafa_fb_putline(int line, const char *s)
