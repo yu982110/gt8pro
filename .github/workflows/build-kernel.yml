@@ -136,9 +136,6 @@ jobs:
       - name: patch kernel framebuffer fill
         run: python3 ci/patch-kernel-fb.py hakios/xnu-src/xnu-8796.121.2
 
-      - name: patch kernel framebuffer text
-        run: python3 ci/patch-kernel-fbtext.py hakios/xnu-src/xnu-8796.121.2
-
       - name: build kernel
         run: |
           cd hakios
