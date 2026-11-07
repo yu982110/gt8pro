@@ -121,7 +121,7 @@ lafa_fb_fill(void)
 	/* P1: two obvious bands (top/bottom), so a fill is unmistakable. */
 	for (int y = 0; y < 3136; y++) {
 		for (int x = 0; x < 1440; x++) {
-			px[y * 1440 + x] = (y < 1568) ? 0xff102040 : 0xff204080;
+			px[y * 1440 + x] = 0xff204080;
 		}
 	}
 	__builtin_arm_dsb(DSB_ISH);
