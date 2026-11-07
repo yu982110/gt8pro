@@ -20,6 +20,8 @@ MARK = "HAKIOS-LAFA-FBMARKS"
 CALL_RE = re.compile(r'^([ \t]*)bsd_init_kprintf\("vfs_mountroot\\n"\);', re.MULTILINE)
 
 HELPERS = r'''
+extern vm_offset_t ml_io_map_unmappable(vm_offset_t, vm_size_t, unsigned int);
+
 /* HAKIOS-LAFA-FBMARKS: one coloured square per milestone, so a boot that leaves no log still
  * says how far it got. The panel is 1440x3136 at PA 0xFC800000, stride 5760; the squares sit
  * in the top row, well clear of the bottom quarter the debug fill paints. */
@@ -79,11 +81,8 @@ def patch(root):
 
     # helpers go after the last include: they use round_page() and ml_io_map_unmappable() with
     # their own declarations, so their position among the functions does not matter
-    inc = 0
-    for line in text.split("\n"):
-        if line.startswith("#include"):
-            inc = text.find(line, inc) + len(line)
-    text = text[:inc] + "\n" + HELPERS + text[inc:]
+    # at the top of the file: bsd_init() calls them, and C wants them declared first
+    text = HELPERS + "\n" + text
 
     # orange right before the mount, yellow right after it returns
     m = CALL_RE.search(text)
