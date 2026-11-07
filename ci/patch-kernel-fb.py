@@ -118,8 +118,9 @@ lafa_fb_fill(void)
 	__builtin_arm_dsb(DSB_ISH);
 	printf("lafa-fb: probe ok\n");
 
-	/* P1: two obvious bands (top/bottom), so a fill is unmistakable. */
-	for (int y = 0; y < 3136; y++) {
+	/* P1: only the bottom quarter. The top is where the loader's live drain draws the kernel's
+	 * log, and filling the whole screen would paint over the one thing worth reading. */
+	for (int y = 2352; y < 3136; y++) {
 		for (int x = 0; x < 1440; x++) {
 			px[y * 1440 + x] = 0xff204080;
 		}
