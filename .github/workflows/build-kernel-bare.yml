@@ -77,6 +77,9 @@ jobs:
           fi
           exit $rc
 
+      - name: patch kernel 4K pages
+        run: python3 ci/patch-kernel-4k-pages.py hakios/xnu-src/xnu-8796.121.2
+
       - name: patch kernel framebuffer (the only patch in this build)
         run: python3 ci/patch-kernel-fb.py hakios/xnu-src/xnu-8796.121.2
 
