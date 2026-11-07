@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """patch-kernel-4k-pages.py -- make the kernel use 4 KiB pages, which is what this SoC has.
 
-Two facts, in order:
+Three facts, in order:
 
 1. The loader prints the memory model register at boot:
        MMFR0 = 0x2100122100001024
          TGran4  (bits 19:16) = 2  -> 4 KiB translation granules supported
          TGran16 (bits 27:24) = 0  -> 16 KiB translation granules NOT supported
 
-2. But the page size is not decided at compile time. osfmk/arm/arm_init.c picks it from how much
+2. The page size is not decided at compile time. osfmk/arm/arm_init.c picks it from how much
    memory the kernel was handed:
 
        if (args->memSize > 1 GB)
@@ -16,15 +16,27 @@ Two facts, in order:
        else
                PAGE_SHIFT_CONST = ARM_PGSHIFT;      /* the hardware granule */
 
-   Our window is 6.5 GB, so the kernel takes the first branch and runs 16 KiB pages on a core that
+   Our window is 6.5 GB, so the kernel took the first branch and ran 16 KiB pages on a core that
    cannot translate them. That is where the broken memory accounting came from:
 
        apfs: pagein asks for 32768 bytes at a time (page size 16384)
        memorystatus_available_pages: 2473                    (40 MB free on a 6.5 GB window)
        coredump: map size: 417687453696                      (417 GB, in a launchd crash)
 
-   Removing __ARM_16K_PG__ from the board headers (H13.h, VMAPPLE.h) changes nothing, because the
-   branch above overrides it. This patch makes both branches take ARM_PGSHIFT.
+   Both branches now take ARM_PGSHIFT.
+
+3. The board headers also have to say "4 KiB": they define __ARM_16K_PG__ (16 KiB granule) and,
+   for a 4 KiB port, __ARM64_PMAP_SUBPAGE_L1__ instead. The same-SoC reference does exactly this:
+
+       #if defined(PANDORA)
+       /* SM8850 (Oryon) has no 16K translation granule: 4 KiB pages like BCM2837. */
+       #define __ARM64_PMAP_SUBPAGE_L1__ 1
+       #else
+       #define __ARM_16K_PG__            1
+       #endif
+
+   We had only removed __ARM_16K_PG__; the subpage-L1 half was missing, so the pmap still assumed
+   the mapping shape of a 16 KiB kernel.
 
     python3 ci/patch-kernel-4k-pages.py <xnu tree>
 """
@@ -32,6 +44,7 @@ import pathlib
 import sys
 
 MARK = "HAKIOS-LAFA-4K"
+GRANULE_MARK = "HAKIOS-LAFA-4K-GRANULE"
 
 OLD = """	{
 		/*
@@ -66,16 +79,21 @@ NEW = """	{
 		PAGE_SHIFT_CONST = ARM_PGSHIFT;
 """
 
+GRANULE_OLD = "#define __ARM_16K_PG__            1\n"
 
-def main(root):
-    root = pathlib.Path(root)
+GRANULE_NEW = """/* HAKIOS-LAFA-4K-GRANULE: no 16 KiB granule on this SoC; 4 KiB pages, subpage L1, like BCM2837. */
+#define __ARM64_PMAP_SUBPAGE_L1__ 1
+"""
+
+
+def patch_page_selection(root):
     f = root / "osfmk/arm/arm_init.c"
     if not f.exists():
         print(f"patch-4k: {f} not found")
         return 1
     text = f.read_text(errors="surrogateescape")
     if MARK in text:
-        print("patch-4k: already applied")
+        print("patch-4k: page selection already patched")
         return 0
     if OLD not in text:
         print("patch-4k: MISS: the page size selection is not the expected shape")
@@ -86,8 +104,33 @@ def main(root):
     return 0
 
 
-if __name__ == "__main__":
+def patch_board_headers(root):
+    """__ARM_16K_PG__ out, __ARM64_PMAP_SUBPAGE_L1__ in, for every arm64 board header."""
+    changed = 0
+    for f in sorted((root / "pexpert/pexpert/arm64").glob("*.h")):
+        text = f.read_text(errors="surrogateescape")
+        if GRANULE_MARK in text:
+            continue
+        if GRANULE_OLD not in text:
+            continue
+        text = text.replace(GRANULE_OLD, GRANULE_NEW, 1)
+        f.write_text(text, errors="surrogateescape")
+        changed += 1
+        print(f"patch-4k: {f.name}: 16 KiB granule -> 4 KiB subpage L1")
+    if changed == 0:
+        print("patch-4k: no board header still defined __ARM_16K_PG__ (already done)")
+    return 0
+
+
+def main(root):
     if len(sys.argv) < 2:
         print("usage: patch-kernel-4k-pages.py <xnu tree>")
         raise SystemExit(2)
-    raise SystemExit(main(sys.argv[1]))
+    root = pathlib.Path(sys.argv[1])
+    rc = patch_page_selection(root)
+    rc |= patch_board_headers(root)
+    return rc
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1] if len(sys.argv) > 1 else "."))
