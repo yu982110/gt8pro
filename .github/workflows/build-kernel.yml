@@ -145,6 +145,9 @@ jobs:
       - name: patch kernel framebuffer
         run: python3 ci/patch-kernel-fb.py hakios/xnu-src/xnu-8796.121.2
 
+      - name: patch kernel milestone squares
+        run: python3 ci/patch-kernel-fbmarks.py hakios/xnu-src/xnu-8796.121.2
+
       - name: patch kernel live log flush
         run: python3 ci/patch-kernel-logflush.py hakios/xnu-src/xnu-8796.121.2
 
