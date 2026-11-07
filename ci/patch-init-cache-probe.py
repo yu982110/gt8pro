@@ -64,6 +64,38 @@ NEW = """	mount_cryptex("OS", ",c=1", devpath);
 
 # The checks print one line each and the kernel console scrolls fast; by the time the screen is
 # looked at, the block above is long gone. Print it again after the final tally, so it is the tail.
+# flash_root mounts /dev/md0 by path, which fails (ENOENT) when the kernel already has it as the
+# root; the cryptex is that same device's container 1, and mounting it directly is what dyld needs
+# -- /System/Library/Caches/com.apple.dyld is a symlink to /System/Cryptexes/OS/... in the image.
+CRYPTEX_ANCHOR = """	check(ok, "mount the Darwin volume read only");
+	if (!ok) {
+		return;
+	}
+"""
+
+CRYPTEX_NEW = """	check(ok, "mount the Darwin volume read only");
+	/*
+	 * HAKIOS-CRYPTEX-DIRECT: the root device cannot be mounted by path here (already the root), but
+	 * the dyld shared cache is that device's container 1, and /System/Library/Caches/com.apple.dyld
+	 * is a symlink to /System/Cryptexes/OS/... in the image. Mount container 1 there.
+	 */
+	{
+		struct stat cst;
+		int mok = mount("apfs", "/System/Cryptexes/OS", MNT_RDONLY, (void *)"/dev/md0,c=1") == 0;
+		int merr = errno;
+
+		printf("  cryptex mount /dev/md0,c=1: %s\\n", mok ? "ok" : strerror(merr));
+		check(mok, "the OS cryptex (container 1 of the root device)");
+		if (stat("/System/Library/Caches/com.apple.dyld/dyld_shared_cache_arm64", &cst) == 0) {
+			printf("  cache via dyld path: %lld bytes\\n", (long long)cst.st_size);
+		} else {
+			printf("  cache via dyld path: %s\\n", strerror(errno));
+		}
+	}
+	if (!ok) {
+		return;
+	}
+"""
 TAIL_ANCHOR = '\tprintf("\\n=== %d checks, %d failed ===\\n", checks, failures);\n'
 
 TAIL_NEW = '''\tprintf("\\n=== %d checks, %d failed ===\\n", checks, failures);
@@ -109,8 +141,14 @@ def main(root):
         print("patch-init-cache-probe: MISS: the flash_root mount check is not where expected")
         return 1
 
-    if TAIL_ANCHOR in text:
-        text = text.replace(TAIL_ANCHOR, TAIL_NEW, 1)
+    if CRYPTEX_ANCHOR in text:
+        text = text.replace(CRYPTEX_ANCHOR, CRYPTEX_NEW, 1)
+        print("patch-init-cache-probe: direct cryptex mount")
+    else:
+        print("patch-init-cache-probe: MISS: the flash_root mount check is not where expected")
+        return 1
+
+    if TAIL_ANCHOR in text:        text = text.replace(TAIL_ANCHOR, TAIL_NEW, 1)
         print("patch-init-cache-probe: tail print after the check tally")
     else:
         print("patch-init-cache-probe: MISS: the final tally printf is not where expected")
