@@ -1,27 +1,29 @@
 #!/usr/bin/env python3
-"""patch-kernel-gicr.py -- fix the GIC redistributor walk that aborts on lafa.
+"""patch-kernel-gicr.py -- give the GIC redistributor walk this SoC's stride.
 
 The kernel died with
 
     Unclassified kernel abort (fault_code=0x10)
 
-which is a Synchronous External Abort -- a load from a device address nothing answers.  Probes in
-osfmk/arm/arm_init.c pinned it to PE_init_cpu(); the only MMIO that path touches before bsd_init
-is osfmk/arm64/gic_v3_irq.c's redistributor walk:
+a Synchronous External Abort: a load from a device address nothing answers. Probes in
+osfmk/arm/arm_init.c pinned it to PE_init_cpu(); the only MMIO on that path before bsd_init is
+osfmk/arm64/gic_v3_irq.c's redistributor walk:
 
-    for (frame = gicr_base; ...; frame += GICR_FRAME_SIZE)
-            uint64_t typer = *(volatile uint64_t *)(frame + GICR_TYPER);   <- first read faults
+    for (frame = gicr_base; ...; frame += GICR_FRAME_SIZE)   <- 0x20000
+            uint64_t typer = *(volatile uint64_t *)(frame + GICR_TYPER);
 
-Two things are wrong for this SoC (SM8850), both confirmed by the same-SoC reference project:
+On SM8850 the redistributor stride is 0x40000 (lafa's own device tree: redistributor-stride =
+<0x00 0x40000>), so the second iteration lands at gicr_base + 0x20000 -- a half frame that does
+not exist -- and the bus answers with an abort. The first frame is fine: an 11-06 boot with
+bootcpu=0 printed its gic line and reached launchd.
 
-  1. GICR_FRAME_SIZE is 0x20000 (the architectural RD_base+SGI_base size); on this SoC the
-     redistributor stride measured on the real device is 0x40000 (RD_base + SGI_base + 64 KiB
-     unused + 64 KiB VLPI frame). Walking at 0x20000 lands in the middle of a frame.
-  2. The walk starts by reading GICR_TYPER, and that very read is what takes the external abort.
-
-The fix does both: the stride becomes 0x40000, and the boot CPU's frame is derived from
-cpu_number() instead of probed, so nothing is read from the redistributors before the exception
-machinery exists.
+The fix is the stride **and nothing else**:
+  * GICR_FRAME_SIZE defaults to the architectural 0x20000 (the same kernel boots QEMU virt, where
+    0x20000 is right) and is taken from the device tree's "redistributor-stride" when present.
+  * The TYPER scan stays: it is what picks the right frame per CPU. Deriving it from
+    cpu_number() instead would be wrong -- xnu numbers CPUs by device-tree order, so with
+    bootcpu=2 cpu_number() is 0 while the running core is redistributor frame 2.
+  * The redistribute wake wait gets a bound: an unbounded spin there hangs with nothing logged.
 
     python3 ci/patch-kernel-gicr.py <xnu tree>
 """
@@ -33,26 +35,35 @@ MARK = "HAKIOS-LAFA-GICR"
 OLD_STRIDE = "#define GICR_FRAME_SIZE         0x20000     /* RD_base + SGI_base per CPU */"
 
 NEW_STRIDE = """/*
- * HAKIOS-LAFA-GICR: this SoC's redistributor stride, not the architectural 0x20000. The same-SoC
- * reference measured it on the real device: redistributor base 0x17080000, stride 0x40000
- * (RD_base + SGI_base + 64 KiB unused + 64 KiB VLPI frame). A walk at 0x20000 lands mid-frame and
- * the bus answers with a Synchronous External Abort.
+ * HAKIOS-LAFA-GICR: the architectural stride is 0x20000 (RD_base + SGI_base), but a SoC may space
+ * its redistributors further apart: SM8850 uses 0x40000 (its device tree says
+ * redistributor-stride = <0x00 0x40000>), so a 0x20000 walk lands in a half frame that nothing
+ * answers and the first read after that takes a Synchronous External Abort. The value is taken
+ * from the device tree when it is there, and stays architectural otherwise (QEMU virt).
  */
-#define GICR_FRAME_SIZE         0x40000"""
+static uint32_t gicr_frame_size = 0x20000;
+#define GICR_FRAME_SIZE        gicr_frame_size"""
 
-OLD_LOOP = """	for (vm_offset_t frame = gicr_base; frame + GICR_FRAME_SIZE <= gicr_base + gicr_size; frame += GICR_FRAME_SIZE) {
-		uint64_t typer = *(volatile uint64_t *)(frame + GICR_TYPER);
+OLD_STRIDE_SETUP = """		uint64_t const *reg = prop;
+		vm_offset_t soc_base = pe_arm_get_soc_base_phys();
+"""
 
-		if ((uint32_t)(typer >> 32) == affinity) {
-			return frame;
+NEW_STRIDE_SETUP = """		uint64_t const *reg = prop;
+		vm_offset_t soc_base = pe_arm_get_soc_base_phys();
+
+		/* HAKIOS-LAFA-GICR: this SoC's redistributor stride, if the device tree says so. */
+		{
+			void const *stride_prop = NULL;
+			unsigned int stride_size = 0;
+
+			if (SecureDTGetProperty(entry, "redistributor-stride", &stride_prop, &stride_size) == kSuccess &&
+			    stride_size == sizeof(uint32_t) && *(const uint32_t *)stride_prop >= 0x10000) {
+				gicr_frame_size = *(const uint32_t *)stride_prop;
+			}
+			kprintf("HAKIOS gic: redistributor stride 0x%x\\n", gicr_frame_size);
 		}
-		if (typer & GICR_TYPER_LAST) {
-			break;
-		}
-	}"""
+"""
 
-# The redistributor wake wait spins without a bound; on this hardware CHILDASLEEP can stay set
-# (the frame reads back as the same value it was written), which hangs the kernel with no output.
 OLD_WAKE = """		gic_write32(gicr + GICR_WAKER, waker & ~GICR_WAKER_PROCSLEEP);
 		while (gic_read32(gicr + GICR_WAKER) & GICR_WAKER_CHILDASLEEP) {
 			/* spin until the redistributor is awake */
@@ -60,25 +71,13 @@ OLD_WAKE = """		gic_write32(gicr + GICR_WAKER, waker & ~GICR_WAKER_PROCSLEEP);
 
 NEW_WAKE = """		gic_write32(gicr + GICR_WAKER, waker & ~GICR_WAKER_PROCSLEEP);
 		for (uint64_t spins = 0; gic_read32(gicr + GICR_WAKER) & GICR_WAKER_CHILDASLEEP; spins++) {
-			/* HAKIOS-LAFA-GICR: bound the wait. On this hardware the frame can read back
-			 * unchanged, and an unbounded spin here hangs the kernel with nothing logged. */
+			/* HAKIOS-LAFA-GICR: bound the wait -- an unbounded spin here hangs with no output. */
 			if (spins > 2000000ULL) {
 				kprintf("HAKIOS gic: redistributor 0x%llx did not wake (WAKER 0x%x); continuing\\n",
 				    (unsigned long long)gicr, gic_read32(gicr + GICR_WAKER));
 				break;
 			}
 		}"""
-
-NEW_LOOP = """	for (vm_offset_t frame = gicr_base; frame + GICR_FRAME_SIZE <= gicr_base + gicr_size; frame += GICR_FRAME_SIZE) {
-		/*
-		 * HAKIOS-LAFA-GICR: the boot CPU's frame is derived, not read. On this SoC the first
-		 * TYPER read is itself what took the Synchronous External Abort, so the walk must not
-		 * start with one. Redistributors are one frame per CPU, in CPU order.
-		 */
-		if (frame == gicr_base + (vm_offset_t)cpu_number() * GICR_FRAME_SIZE) {
-			return frame;
-		}
-	}"""
 
 
 def main(root):
@@ -92,31 +91,22 @@ def main(root):
         return 0
 
     bad = 0
-    if OLD_STRIDE in text:
-        text = text.replace(OLD_STRIDE, NEW_STRIDE, 1)
-        print("patch-gicr: GICR_FRAME_SIZE 0x20000 -> 0x40000")
-    else:
-        print("patch-gicr: MISS: the GICR_FRAME_SIZE line is not the expected one")
-        bad = 1
+    for old, new, what in (
+        (OLD_STRIDE, NEW_STRIDE, "GICR_FRAME_SIZE becomes runtime, default 0x20000"),
+        (OLD_STRIDE_SETUP, NEW_STRIDE_SETUP, "stride read from the device tree"),
+        (OLD_WAKE, NEW_WAKE, "redistributor wake wait is bounded"),
+    ):
+        if old in text:
+            text = text.replace(old, new, 1)
+            print("patch-gicr:", what)
+        else:
+            print(f"patch-gicr: MISS: {what} (anchor not found)")
+            bad = 1
 
-    if OLD_LOOP in text:
-        text = text.replace(OLD_LOOP, NEW_LOOP, 1)
-        print("patch-gicr: no TYPER read before the redistributor is known")
-    else:
-        print("patch-gicr: MISS: the redistributor walk is not the expected one")
-        bad = 1
-
-    if OLD_WAKE in text:
-        text = text.replace(OLD_WAKE, NEW_WAKE, 1)
-        print("patch-gicr: redistributor wake wait is bounded")
-    else:
-        print("patch-gicr: MISS: the redistributor wake wait is not the expected one")
-        bad = 1
-
-    # keep the affinity value used (it appears in the panic message)
+    # the scan stays; mark the file so a second run is a no-op
     text = text.replace(
         "\tuint32_t affinity = (uint32_t)(((mpidr >> 32) & 0xff) << 24 | (mpidr & 0xffffff));",
-        "\tuint32_t affinity __unused = (uint32_t)(((mpidr >> 32) & 0xff) << 24 | (mpidr & 0xffffff));   /* "
+        "\tuint32_t affinity = (uint32_t)(((mpidr >> 32) & 0xff) << 24 | (mpidr & 0xffffff));   /* "
         + MARK + " */",
         1,
     )
