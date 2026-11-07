@@ -86,6 +86,9 @@ jobs:
       - name: patch kernel GIC redistributor stride
         run: python3 ci/patch-kernel-gicr.py hakios/xnu-src/xnu-8796.121.2
 
+      - name: patch kernel live-log probes
+        run: python3 ci/patch-kernel-livelog-probe.py hakios/xnu-src/xnu-8796.121.2
+
       - name: build kernel
         run: |
           cd hakios
