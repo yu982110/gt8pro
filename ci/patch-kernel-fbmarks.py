@@ -84,11 +84,11 @@ def patch(root):
     # just before bsd_init() itself: its includes are scattered through the file, and the last of
     # them comes after the function, so an include-based offset puts the helpers out of scope
     anchor2 = CALL_RE.search(text)
-    fn = text.rfind("bsd_init(void)", 0, anchor2.start())
-    if fn < 0:
+    defn = re.search(r'\n(?:static\s+)?void\s*\n?bsd_init\(void\)\s*\n?\{', text)
+    if defn is None or defn.start() > anchor2.start():
         print("patch-fbmarks: bsd_init's definition not found")
         return 1
-    line = text.rfind("\n", 0, fn)
+    line = text.rfind("\n", 0, defn.start())
     if line < 0:
         line = 0
     text = text[:line] + "\n" + HELPERS + text[line:]
