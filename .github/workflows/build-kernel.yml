@@ -148,6 +148,20 @@ jobs:
       - name: patch kernel display services
         run: python3 ci/patch-kernel-display.py hakios/xnu-src/xnu-8796.121.2 --force
 
+      - name: stub MiniIOSurfaceUsage
+        run: |
+          F=hakios/xnu-src/xnu-8796.121.2/iokit/Kernel/SweetFramebuffer.cpp
+          cat >> "$F" <<'EOF'
+
+          /* loader_return.c asks the Mini surface code how many surfaces are out; the Sweet code
+           * keeps no such count, and the number is only printed in the return report. */
+          extern "C" void MiniIOSurfaceUsage(uint32_t *count, uint64_t *bytes)
+          {
+          	if (count) { *count = 0; }
+          	if (bytes) { *bytes = 0; }
+          }
+          EOF
+
       - name: build kernel
         run: |
           cd hakios
