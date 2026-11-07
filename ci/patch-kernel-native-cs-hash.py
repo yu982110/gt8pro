@@ -40,7 +40,8 @@ def main(root):
         print("patch-native-cs-hash: already applied")
         return 0
 
-    # every "MACHINE_FLAGS_ARM64_<BOARD> = ..." line gets the define, after -march
+    # CFLAGS_ARM64 is the one every arm64 compile sees; MACHINE_FLAGS_ARM64_<BOARD> only covers the
+    # boards listed there (ours is not one of them), which is why the first attempt changed nothing.
     count = 0
 
     def add(m):
@@ -49,11 +50,12 @@ def main(root):
         if DEFINE in line:
             return line
         count += 1
-        return line.replace(" -march=", f" {DEFINE} -march=", 1)
+        return line.replace("-DLP64", f"-DLP64 {DEFINE}", 1)
 
-    text = re.sub(r"^MACHINE_FLAGS_ARM64_[A-Z0-9_]+ = .*$", add, text, flags=re.M)
+    text = re.sub(r"^CFLAGS_ARM64\t= .*$", add, text, flags=re.M)
+    text = re.sub(r"^CFLAGS_ARM64 = .*$", add, text, flags=re.M)
     if count == 0:
-        print("patch-native-cs-hash: MISS: no MACHINE_FLAGS_ARM64_* lines to change")
+        print("patch-native-cs-hash: MISS: no CFLAGS_ARM64 lines to change")
         return 1
 
     text += (
