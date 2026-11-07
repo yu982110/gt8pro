@@ -151,6 +151,16 @@ jobs:
       - name: patch kernel kprintf log hook
         run: python3 ci/patch-kernel-loghook.py hakios/xnu-src/xnu-8796.121.2
 
+      # 内核编译产物：干净 runner 上每次都要编 12 分钟；把 BUILD/obj 存起来，改一两个文件时
+      # 只重编那几个（make 按时间戳判断），实测 12 分钟 -> 2-3 分钟。
+      - name: cache the kernel build directory
+        uses: actions/cache@v4
+        with:
+          path: hakios/xnu-src/xnu-8796.121.2/BUILD
+          key: xnu-build-v1
+          restore-keys: |
+            xnu-build-
+
       - name: build kernel
         run: |
           cd hakios
