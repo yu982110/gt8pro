@@ -1,0 +1,39 @@
+name: fetch-musl
+
+# 只为取一个文件：Alpine 的 musl 动态加载器（aarch64），给手机上的静态 Python 用。
+on:
+  workflow_dispatch:
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: download the alpine musl package
+        run: |
+          set -eux
+          for v in v3.20 v3.19 v3.18; do
+            if curl -fsSL -o musl.apk "https://dl-cdn.alpinelinux.org/alpine/${v}/main/aarch64/musl-1.2.5-r0.apk"; then
+              echo "got it from ${v}"
+              break
+            fi
+          done
+          ls -la musl.apk
+          mkdir -p out
+          tar xzf musl.apk -C out 2>/dev/null || tar xJf musl.apk -C out
+          find out -name 'ld-musl*' -o -name 'libc.musl*' | head
+
+      - name: collect what python needs
+        run: |
+          set -eux
+          mkdir -p dist
+          find out -name 'ld-musl-aarch64.so.1' -exec cp {} dist/ \;
+          find out -name 'libc.so' -path '*lib*' -exec cp {} dist/libc.so \;
+          ls -la dist
+          sha256sum dist/* || true
+
+      - name: upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: musl-aarch64
+          path: dist/
+          if-no-files-found: error
