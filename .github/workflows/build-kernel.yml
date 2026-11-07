@@ -162,6 +162,12 @@ jobs:
           }
           EOF
 
+      - name: disable AppleCLCD registration
+        run: |
+          F=hakios/xnu-src/xnu-8796.121.2/iokit/KernelConfigTables.cpp
+          sed -i 's/"AppleCLCD"/"AppleCLCD_disabled"/g' "$F" || true
+          grep -c 'AppleCLCD' "$F" || true
+
       - name: build kernel
         run: |
           cd hakios
