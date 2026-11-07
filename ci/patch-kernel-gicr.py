@@ -51,6 +51,24 @@ OLD_LOOP = """	for (vm_offset_t frame = gicr_base; frame + GICR_FRAME_SIZE <= gi
 		}
 	}"""
 
+# The redistributor wake wait spins without a bound; on this hardware CHILDASLEEP can stay set
+# (the frame reads back as the same value it was written), which hangs the kernel with no output.
+OLD_WAKE = """		gic_write32(gicr + GICR_WAKER, waker & ~GICR_WAKER_PROCSLEEP);
+		while (gic_read32(gicr + GICR_WAKER) & GICR_WAKER_CHILDASLEEP) {
+			/* spin until the redistributor is awake */
+		}"""
+
+NEW_WAKE = """		gic_write32(gicr + GICR_WAKER, waker & ~GICR_WAKER_PROCSLEEP);
+		for (uint64_t spins = 0; gic_read32(gicr + GICR_WAKER) & GICR_WAKER_CHILDASLEEP; spins++) {
+			/* HAKIOS-LAFA-GICR: bound the wait. On this hardware the frame can read back
+			 * unchanged, and an unbounded spin here hangs the kernel with nothing logged. */
+			if (spins > 2000000ULL) {
+				kprintf("HAKIOS gic: redistributor 0x%llx did not wake (WAKER 0x%x); continuing\\n",
+				    (unsigned long long)gicr, gic_read32(gicr + GICR_WAKER));
+				break;
+			}
+		}"""
+
 NEW_LOOP = """	for (vm_offset_t frame = gicr_base; frame + GICR_FRAME_SIZE <= gicr_base + gicr_size; frame += GICR_FRAME_SIZE) {
 		/*
 		 * HAKIOS-LAFA-GICR: the boot CPU's frame is derived, not read. On this SoC the first
@@ -86,6 +104,13 @@ def main(root):
         print("patch-gicr: no TYPER read before the redistributor is known")
     else:
         print("patch-gicr: MISS: the redistributor walk is not the expected one")
+        bad = 1
+
+    if OLD_WAKE in text:
+        text = text.replace(OLD_WAKE, NEW_WAKE, 1)
+        print("patch-gicr: redistributor wake wait is bounded")
+    else:
+        print("patch-gicr: MISS: the redistributor wake wait is not the expected one")
         bad = 1
 
     # keep the affinity value used (it appears in the panic message)
