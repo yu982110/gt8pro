@@ -86,6 +86,9 @@ jobs:
       - name: apply unixnu 4K patches
         run: |
           cd hakios/xnu-src/xnu-8796.121.2
+          # hakios.patch has already changed these files, so the index no longer matches the tree
+          # and "git apply --3way" refuses with "does not match index"; stage everything first.
+          git add -A
           for p in $GITHUB_WORKSPACE/ci/0103-unixnu-native-4k-bootstrap-capacity.patch \
                    $GITHUB_WORKSPACE/ci/0104-unixnu-native-4k-user-abi.patch \
                    $GITHUB_WORKSPACE/ci/0105-unixnu-native-4k-signature-hash-cache.patch \
