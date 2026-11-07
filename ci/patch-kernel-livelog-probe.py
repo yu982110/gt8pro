@@ -75,6 +75,28 @@ ANCHORS = [
     (KSTARTUP, "\tturnstiles_init();\n", probe("Z turnstiles_init returned"), "after"),
     (KSTARTUP, "\tmach_init_activity_id();\n", probe("AA mach_init_activity_id returned"), "after"),
     (KSTARTUP, "\thost_statistics_init();\n", probe("AB host_statistics_init returned"), "after"),
+    # ---- the last stretch: host_statistics_init() -> bsd_init() ----
+    (KSTARTUP, "\texception_init();\n", probe("AE exception_init returned"), "after"),
+    (KSTARTUP, "\tsfi_init();\n", probe("AF sfi_init returned"), "after"),
+    (KSTARTUP, "\tidle_thread_create(processor);\n", probe("AG idle_thread_create returned"), "after"),
+    (KSTARTUP, "\tsched_startup();\n", probe("AH sched_startup returned"), "after"),
+    (KSTARTUP, "\tthread_daemon_init();\n", probe("AI thread_daemon_init returned"), "after"),
+    (KSTARTUP, "\tthread_bind(processor);\n", probe("AJ thread_bind returned"), "after"),
+    (KSTARTUP, "\tmapping_adjust();\n", probe("AK mapping_adjust returned"), "after"),
+    (KSTARTUP, "\tclock_service_create();\n", probe("AL clock_service_create returned"), "after"),
+    (KSTARTUP, "\tdevice_service_create();\n", probe("AM device_service_create returned"), "after"),
+    (KSTARTUP, "\tphys_carveout_init();\n", probe("AN phys_carveout_init returned"), "after"),
+    # PE_init_iokit() is the big one: it is where the platform expert and our display driver live
+    (KSTARTUP, "\tPE_init_iokit();\n",
+     probe("AO before PE_init_iokit") + "\tPE_init_iokit();\n" + probe("AP PE_init_iokit returned"),
+     "replace"),
+    (KSTARTUP, "\tinitialize_screen(NULL, kPEAcquireScreen);\n",
+     probe("AQ before initialize_screen") + "\tinitialize_screen(NULL, kPEAcquireScreen);\n"
+     + probe("AR initialize_screen returned"), "replace"),
+    (KSTARTUP, "\tvm_commpage_init();\n", probe("AS vm_commpage_init returned"), "after"),
+    (KSTARTUP, "\tmachine_lockdown();\n", probe("AT machine_lockdown returned"), "after"),
+    (KSTARTUP, "\tPE_lockdown_iokit();\n", probe("AU PE_lockdown_iokit returned"), "after"),
+    (KSTARTUP, "\tkperf_init_early();\n", probe("AV kperf_init_early returned"), "after"),
     # bsd_init() is where the framebuffer patch draws; bracket it
     (KSTARTUP, "\tbsd_init();\n", probe("AC before bsd_init") + "\tbsd_init();\n"
      + probe("AD after bsd_init"), "replace"),
