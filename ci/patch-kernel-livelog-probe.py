@@ -69,17 +69,19 @@ def main(root):
         text = text[:line_end] + DECL + text[line_end:]
         print("patch-liveprobe: declaration added (fallback anchor)")
 
+    # The first four anchors are the ones arm_init() cannot do without. The machine_startup()
+    # call at the end is a bonus: hakios.patch may have moved it, and losing it must not fail
+    # the build (the other nine probes already say where the boot stops).
     problems = 0
     placed = 0
-    for anchor, replacement in REPLACEMENTS:
+    for index, (anchor, replacement) in enumerate(REPLACEMENTS):
+        required = index < len(REPLACEMENTS) - 1
         first = text.find(anchor)
-        if first < 0:
-            print(f"  MISS: {anchor.strip()!r}")
-            problems += 1
-            continue
-        if text.find(anchor, first + 1) >= 0:
-            print(f"  MISS (not unique): {anchor.strip()!r}")
-            problems += 1
+        if first < 0 or text.find(anchor, first + 1) >= 0:
+            why = "not found" if first < 0 else "not unique"
+            print(f"  {'MISS' if required else 'skip'} ({why}): {anchor.strip()!r}")
+            if required:
+                problems += 1
             continue
         text = text[:first] + replacement + text[first + len(anchor):]
         placed += 1
