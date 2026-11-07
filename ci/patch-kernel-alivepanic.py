@@ -16,9 +16,9 @@ NEW = '''\t/* HAKIOS-LAFA: the system now gets past launchd's ignition and does 
 \t * so nothing ever hands the kernel log back to the loader. One panic, 45 seconds in, and the
 \t * log comes out; the timer is taken off again once it has been read. */
 \t{
-\t\textern kern_return_t kernel_thread_start(thread_continuation_t, void *, thread_t *);
+\t\textern kern_return_t kernel_thread_start(void (*)(void *, wait_result_t), void *, thread_t *);
 \t\tthread_t lafa_watchdog;
-\t\tif (kernel_thread_start((thread_continuation_t)lafa_alive_panic, NULL, &lafa_watchdog) == KERN_SUCCESS) {
+\t\tif (kernel_thread_start(lafa_alive_panic, NULL, &lafa_watchdog) == KERN_SUCCESS) {
 \t\t\tthread_deallocate(lafa_watchdog);
 \t\t}
 \t}
