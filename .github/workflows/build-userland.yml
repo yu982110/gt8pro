@@ -1,0 +1,104 @@
+name: build lafa userland root image
+
+# The kernel workflow never touches userland. init.c lives in userland/src/init.c and ends up in
+# root.apfs, the 4 MiB image that travels in the boot payload next to the kernel -- so any change to
+# init.c has to be built here. build.sh skips compiling when it cannot find ld64:
+
+#     [ -z "$PREBUILT" ] && ! command -v ld64 && PREBUILT=1
+
+# which is what happens on the Windows side, and why an edit to init.c silently does nothing there.
+# This job installs the same Darwin toolchain the kernel job uses, then builds the image.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  userland:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+
+    steps:
+      - name: checkout (device package + this workflow)
+        uses: actions/checkout@v4
+
+      - name: system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential clang lld llvm make git python3 perl flex bison m4 \
+            autoconf automake libtool pkg-config libssl-dev zlib1g-dev libxml2-dev \
+            libncurses-dev 7zip lz4 unzip curl xz-utils rsync file
+
+      - name: theos + Linux toolchain + iPhoneOS16.5 SDK
+        run: |
+          set -euo pipefail
+          git clone --recursive --depth 1 https://github.com/theos/theos.git "$HOME/theos"
+          mkdir -p "$HOME/theos/toolchain"
+          TC=https://github.com/L1ghtmann/llvm-project/releases
+          curl -fsSL "$TC/download/test-210562a/iOSToolchain-x86_64.tar.xz" | tar -xJ -C "$HOME/theos/toolchain/" || \
+            curl -fsSL "$TC/latest/download/iOSToolchain-x86_64.tar.xz" | tar -xJ -C "$HOME/theos/toolchain/"
+          test -x "$HOME/theos/toolchain/linux/iphone/bin/ld"
+          git clone --depth 1 --filter=blob:none --sparse https://github.com/theos/sdks.git "$HOME/theos/sdks-git"
+          git -C "$HOME/theos/sdks-git" sparse-checkout set iPhoneOS16.5.sdk
+          mkdir -p "$HOME/theos/sdks"
+          ln -sfn "$HOME/theos/sdks-git/iPhoneOS16.5.sdk" "$HOME/theos/sdks/iPhoneOS16.5.sdk"
+
+      - name: hakios source + lafa device package
+        run: |
+          set -euo pipefail
+          git clone --depth 1 https://github.com/oosexgang/hakios-xnu-kernel.git hakios
+          cp -r lafa hakios/devices/lafa
+          grep -q '^device lafa' hakios/devices/manifest.conf || \
+            printf '\ndevice lafa\n\tpath        devices/lafa\n' >> hakios/devices/manifest.conf
+          cd hakios
+          python3 tools/hakios-device.py check lafa
+
+      - name: what the toolchain looks like here
+        run: |
+          set +e
+          echo "PATH=$PATH"
+          echo "--- theos toolchain bin (which names exist) ---"
+          ls "$HOME/theos/toolchain/linux/iphone/bin" | tr '\n' ' ' | head -c 2000
+          echo
+          for t in ld64 ld64.lld ld clang xnu-clang; do
+            printf '%-10s %s\n' "$t" "$(command -v $t || echo MISSING)"
+          done
+
+      - name: host tools (xnu-deps/setup.sh) - provides xnu-clang
+        run: |
+          cd hakios
+          set +e
+          xnu-deps/setup.sh 2>&1 | tail -30
+          echo "--- after setup ---"
+          for t in ld64 ld64.lld ld clang xnu-clang; do
+            printf '%-10s %s\n' "$t" "$(command -v $t || echo MISSING)"
+          done
+          echo "--- prebuilt/userland present? ---"
+          ls ../prebuilt/userland 2>/dev/null | head -5 || echo "(no prebuilt dir)"
+
+      - name: build the root image
+        run: |
+          set +e
+          export PATH="$HOME/theos/toolchain/linux/iphone/bin:$PATH"
+          cd hakios/userland
+          echo "--- ld64 after PATH ---"; command -v ld64 || echo MISSING
+          timeout 2400 bash build.sh 2>&1 | tail -80
+          echo "--- exit: $? ---"
+          ls -l --time-style=+%H:%M:%S root.apfs obj/init 2>/dev/null
+
+      - name: does the new init say cache probe
+        run: |
+          set +e
+          cd hakios/userland
+          echo "obj/init: $(grep -ac 'cache probe' obj/init 2>/dev/null || echo 0)"
+          echo "root.apfs: $(grep -ac 'cache probe' root.apfs 2>/dev/null || echo 0)"
+          ls -l root.apfs
+
+      - name: upload root.apfs
+        uses: actions/upload-artifact@v4
+        with:
+          name: lafa-root-apfs
+          path: |
+            hakios/userland/root.apfs
+            hakios/userland/obj/init
+          if-no-files-found: warn
