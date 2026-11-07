@@ -145,17 +145,6 @@ jobs:
       - name: patch kernel framebuffer
         run: python3 ci/patch-kernel-fb.py hakios/xnu-src/xnu-8796.121.2
 
-# (stub step removed with the display patch)          cat >> "$F" <<'EOF'
-
-          /* loader_return.c asks the Mini surface code how many surfaces are out; the Sweet code
-           * keeps no such count, and the number is only printed in the return report. */
-          extern "C" void MiniIOSurfaceUsage(uint32_t *count, uint64_t *bytes)
-          {
-          	if (count) { *count = 0; }
-          	if (bytes) { *bytes = 0; }
-          }
-          EOF
-
       - name: patch kernel live log flush
         run: python3 ci/patch-kernel-logflush.py hakios/xnu-src/xnu-8796.121.2
 
