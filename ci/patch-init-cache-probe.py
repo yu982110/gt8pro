@@ -102,6 +102,13 @@ def main(root):
         print("patch-init-cache-probe: MISS: the cryptex mount block is not the expected shape")
         return 1
     text = text.replace(ANCHOR, NEW, 1)
+    if CRYPTEX_ANCHOR in text:
+        text = text.replace(CRYPTEX_ANCHOR, CRYPTEX_NEW, 1)
+        print("patch-init-cache-probe: direct cryptex mount")
+    else:
+        print("patch-init-cache-probe: MISS: the flash_root mount check is not where expected")
+        return 1
+
     if TAIL_ANCHOR in text:
         text = text.replace(TAIL_ANCHOR, TAIL_NEW, 1)
         print("patch-init-cache-probe: tail print after the check tally")
