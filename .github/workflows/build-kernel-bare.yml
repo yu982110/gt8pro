@@ -1,0 +1,103 @@
+name: build lafa kernel BARE (framebuffer patch only)
+
+"on":
+  workflow_dispatch:
+
+jobs:
+  kernel:
+    name: bare XNU kernel for lafa (only the framebuffer patch)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 240
+
+    steps:
+      - name: checkout (device package + this workflow)
+        uses: actions/checkout@v4
+
+      - name: system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential clang lld llvm make git python3 perl flex bison m4 \
+            autoconf automake libtool pkg-config libssl-dev zlib1g-dev libxml2-dev \
+            libncurses-dev 7zip lz4 unzip curl xz-utils rsync file
+
+      - name: theos + Linux toolchain + iPhoneOS16.5 SDK
+        run: |
+          set -euo pipefail
+          git clone --recursive --depth 1 https://github.com/theos/theos.git "$HOME/theos"
+          mkdir -p "$HOME/theos/toolchain"
+          TC=https://github.com/L1ghtmann/llvm-project/releases
+          curl -fsSL "$TC/download/test-210562a/iOSToolchain-x86_64.tar.xz" | tar -xJ -C "$HOME/theos/toolchain/" || \
+            curl -fsSL "$TC/latest/download/iOSToolchain-x86_64.tar.xz" | tar -xJ -C "$HOME/theos/toolchain/"
+          test -x "$HOME/theos/toolchain/linux/iphone/bin/ld"
+          git clone --depth 1 --filter=blob:none --sparse https://github.com/theos/sdks.git "$HOME/theos/sdks-git"
+          git -C "$HOME/theos/sdks-git" sparse-checkout set iPhoneOS16.5.sdk
+          mkdir -p "$HOME/theos/sdks"
+          ln -sfn "$HOME/theos/sdks-git/iPhoneOS16.5.sdk" "$HOME/theos/sdks/iPhoneOS16.5.sdk"
+
+      - name: hakios source + lafa device package
+        run: |
+          set -euo pipefail
+          git clone --depth 1 https://github.com/oosexgang/hakios-xnu-kernel.git hakios
+          cp -r lafa hakios/devices/lafa
+          grep -q '^device lafa' hakios/devices/manifest.conf || \
+            printf '\ndevice lafa\n\tpath        devices/lafa\n' >> hakios/devices/manifest.conf
+          cd hakios
+          python3 tools/hakios-device.py check lafa
+
+      # Ubuntu 22.04 的 glibc 2.35 没有 strlcat/strlcpy（2.38 才加），XNU 的 SETUP 主机工具
+      # replacecontents 要用；ci/patch-hostcompat.py 给 hostcompat.h 补两个实现（它被 -include 进所有主机工具）。
+      - name: "patch tree (strlcpy/strlcat, clang auto-var-init)"
+        run: python3 ci/patch-hostcompat.py hakios
+
+      - name: configure
+        run: |
+          cd hakios
+          make lafa_defconfig
+          make config
+
+      - name: kernel tree (xnu/apply.sh)
+        run: |
+          cd hakios
+          [ -d xnu-src/xnu-8796.121.2 ] || xnu/apply.sh
+          ls -d xnu-src/xnu-8796.121.2
+      - name: host tools (xnu-deps/setup.sh)
+        run: |
+          cd hakios
+          set +e
+          xnu-deps/setup.sh 2>&1 | tee /tmp/setup.log
+          rc=${PIPESTATUS[0]}
+          if [ $rc -ne 0 ]; then
+            echo "::group::exporthdrs.log (tail)"
+            tail -120 xnu-deps/exporthdrs.log 2>/dev/null || echo "(no exporthdrs.log)"
+            echo "::endgroup::"
+            echo "::group::setup.log (tail)"
+            tail -60 /tmp/setup.log
+            echo "::endgroup::"
+          fi
+          exit $rc
+
+      - name: patch kernel framebuffer (the only patch in this build)
+        run: python3 ci/patch-kernel-fb.py hakios/xnu-src/xnu-8796.121.2
+
+      - name: build kernel
+        run: |
+          cd hakios
+          set +e
+          make kernel JOBS=4 2>&1 | tee /tmp/kernel.log
+          rc=${PIPESTATUS[0]}
+          if [ $rc -ne 0 ]; then
+            echo "::group::kernel log (errors)"
+            grep -n -m 60 -E 'error:|Error [0-9]|undefined reference|fatal error|No rule' /tmp/kernel.log || tail -80 /tmp/kernel.log
+            echo "::endgroup::"
+          fi
+          exit $rc
+
+
+      - name: upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lafa-kernel-bare
+          path: hakios/hakios-kernel
+          if-no-files-found: warn
