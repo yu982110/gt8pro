@@ -80,6 +80,9 @@ jobs:
       - name: patch kernel 4K pages
         run: python3 ci/patch-kernel-4k-pages.py hakios/xnu-src/xnu-8796.121.2
 
+      - name: patch kernel native cs hash
+        run: python3 ci/patch-kernel-native-cs-hash.py hakios/xnu-src/xnu-8796.121.2
+
       - name: patch kernel framebuffer (the only patch in this build)
         run: python3 ci/patch-kernel-fb.py hakios/xnu-src/xnu-8796.121.2
 
