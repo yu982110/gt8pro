@@ -80,8 +80,6 @@ jobs:
       - name: patch kernel framebuffer (the only patch in this build)
         run: python3 ci/patch-kernel-fb.py hakios/xnu-src/xnu-8796.121.2
 
-      - name: patch kernel startup probes
-        run: python3 ci/patch-kernel-startup-probe.py hakios/xnu-src/xnu-8796.121.2
 
       - name: patch kernel GIC redistributor stride
         run: python3 ci/patch-kernel-gicr.py hakios/xnu-src/xnu-8796.121.2
