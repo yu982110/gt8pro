@@ -145,6 +145,9 @@ jobs:
       - name: patch kernel framebuffer
         run: python3 ci/patch-kernel-fb.py hakios/xnu-src/xnu-8796.121.2
 
+      - name: patch kernel display services
+        run: python3 ci/patch-kernel-display.py hakios/xnu-src/xnu-8796.121.2
+
       - name: build kernel
         run: |
           cd hakios
