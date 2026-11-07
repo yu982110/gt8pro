@@ -86,6 +86,10 @@ jobs:
       - name: apply unixnu 4K patches
         run: |
           cd hakios/xnu-src/xnu-8796.121.2
+          # GitHub runs steps with bash -e, and patch(1) exits non-zero when a hunk needed fuzz or
+          # an offset -- which is every hunk here. The patches still apply; the early exit was the
+          # whole failure.
+          set +e
           # git apply is strict about the index and about context; these patches were made against
           # a differently patched tree, so use patch(1) with fuzz, and keep going if one hunk is
           # already there (--forward) or reversed (--reverse-safe is not a thing; -N does that).
