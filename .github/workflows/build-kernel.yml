@@ -139,6 +139,9 @@ jobs:
       - name: patch kernel platform identity
         run: python3 ci/patch-kernel-platform.py hakios/xnu-src/xnu-8796.121.2
 
+      - name: patch kernel alive panic
+        run: python3 ci/patch-kernel-alivepanic.py hakios/xnu-src/xnu-8796.121.2
+
       - name: patch kernel framebuffer
         run: python3 ci/patch-kernel-fb.py hakios/xnu-src/xnu-8796.121.2
 
