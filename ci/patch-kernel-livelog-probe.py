@@ -64,6 +64,20 @@ ANCHORS = [
     (KSTARTUP, "\tsched_init();\n", probe("P sched_init returned"), "after"),
     (KSTARTUP, "\tmachine_init();\n", probe("Q machine_init returned"), "after"),
     (KSTARTUP, "\tclock_init();\n", probe("R clock_init returned"), "after"),
+    # ---- the rest of kernel_bootstrap(), every call on the way to bsd_init() ----
+    (KSTARTUP, "\tthread_group_init();\n", probe("S thread_group_init returned"), "after"),
+    (KSTARTUP, "\tcoalitions_init();\n", probe("T coalitions_init returned"), "after"),
+    (KSTARTUP, "\tcode_signing_init();\n", probe("U code_signing_init returned"), "after"),
+    (KSTARTUP, "\ttask_init();\n", probe("V task_init returned"), "after"),
+    (KSTARTUP, "\tthread_init();\n", probe("W thread_init returned"), "after"),
+    (KSTARTUP, "\trestartable_init();\n", probe("X restartable_init returned"), "after"),
+    (KSTARTUP, "\tworkq_init();\n", probe("Y workq_init returned"), "after"),
+    (KSTARTUP, "\tturnstiles_init();\n", probe("Z turnstiles_init returned"), "after"),
+    (KSTARTUP, "\tmach_init_activity_id();\n", probe("AA mach_init_activity_id returned"), "after"),
+    (KSTARTUP, "\thost_statistics_init();\n", probe("AB host_statistics_init returned"), "after"),
+    # bsd_init() is where the framebuffer patch draws; bracket it
+    (KSTARTUP, "\tbsd_init();\n", probe("AC before bsd_init") + "\tbsd_init();\n"
+     + probe("AD after bsd_init"), "replace"),
 ]
 
 # Where the declaration can go in each file: right after any include.
