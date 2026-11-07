@@ -145,13 +145,7 @@ jobs:
       - name: patch kernel framebuffer
         run: python3 ci/patch-kernel-fb.py hakios/xnu-src/xnu-8796.121.2
 
-      - name: patch kernel display services
-        run: python3 ci/patch-kernel-display.py hakios/xnu-src/xnu-8796.121.2 --force
-
-      - name: stub MiniIOSurfaceUsage
-        run: |
-          F=hakios/xnu-src/xnu-8796.121.2/iokit/Kernel/SweetFramebuffer.cpp
-          cat >> "$F" <<'EOF'
+# (stub step removed with the display patch)          cat >> "$F" <<'EOF'
 
           /* loader_return.c asks the Mini surface code how many surfaces are out; the Sweet code
            * keeps no such count, and the number is only printed in the return report. */
@@ -162,11 +156,11 @@ jobs:
           }
           EOF
 
-      - name: disable AppleCLCD registration
-        run: |
-          F=hakios/xnu-src/xnu-8796.121.2/iokit/KernelConfigTables.cpp
-          sed -i 's/"AppleCLCD"/"AppleCLCD_disabled"/g' "$F" || true
-          grep -c 'AppleCLCD' "$F" || true
+      - name: patch kernel live log flush
+        run: python3 ci/patch-kernel-logflush.py hakios/xnu-src/xnu-8796.121.2
+
+      - name: patch kernel kprintf log hook
+        run: python3 ci/patch-kernel-loghook.py hakios/xnu-src/xnu-8796.121.2
 
       - name: build kernel
         run: |
