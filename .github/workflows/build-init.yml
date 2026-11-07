@@ -46,6 +46,9 @@ jobs:
           git clone --depth 1 https://github.com/oosexgang/hakios-xnu-kernel.git hakios
           ls hakios/userland/libmini
 
+      - name: our init.c changes
+        run: python3 ci/patch-init-cache-probe.py hakios
+
       - name: toolchain shims (ld64 -> theos ld, xnu-clang -> theos clang -target arm64)
         run: |
           set -euo pipefail
