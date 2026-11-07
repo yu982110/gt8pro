@@ -46,15 +46,23 @@ jobs:
           git clone --depth 1 https://github.com/oosexgang/hakios-xnu-kernel.git hakios
           ls hakios/userland/libmini
 
-      - name: toolchain shims (ld64 -> theos ld, xnu-clang -> theos clang)
+      - name: toolchain shims (ld64 -> theos ld, xnu-clang -> theos clang -target arm64)
         run: |
           set -euo pipefail
           TC="$HOME/theos/toolchain/linux/iphone/bin"
           ls "$TC" | tr '\n' ' '; echo
           sudo ln -sf "$TC/ld" /usr/local/bin/ld64
-          sudo ln -sf "$TC/clang" /usr/local/bin/xnu-clang
+          # -arch is not enough here: a plain clang defaults to the host triple and errors out in
+          # libmini/start.S with "unknown use of instruction mnemonic". The iOS triple is what
+          # makes it assemble arm64.
+          sudo tee /usr/local/bin/xnu-clang >/dev/null <<'EOF'
+          #!/bin/sh
+          exec "$HOME/theos/toolchain/linux/iphone/bin/clang" -target arm64-apple-ios16.0 "$@"
+          EOF
+          sudo chmod +x /usr/local/bin/xnu-clang
           ld64 -v 2>&1 | head -2 || true
-          xnu-clang --version 2>&1 | head -2 || true
+          echo 'int main(void){return 0;}' > /tmp/t.c
+          xnu-clang -c /tmp/t.c -o /tmp/t.o && file /tmp/t.o
 
       - name: compile init (freestanding, libmini)
         run: |
