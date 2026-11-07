@@ -11,12 +11,18 @@ jobs:
       - name: download the alpine musl package
         run: |
           set -eux
-          for v in v3.20 v3.19 v3.18; do
-            if curl -fsSL -o musl.apk "https://dl-cdn.alpinelinux.org/alpine/${v}/main/aarch64/musl-1.2.5-r0.apk"; then
-              echo "got it from ${v}"
+          BASE=https://dl-cdn.alpinelinux.org/alpine
+          rm -f musl.apk
+          for v in v3.21 v3.20 v3.19 v3.18 edge; do
+            IDX=$(curl -fsSL "$BASE/$v/main/aarch64/" || true)
+            NAME=$(printf '%s' "$IDX" | grep -o 'musl-[0-9.]*-r[0-9]*\.apk' | head -1)
+            echo "$v -> ${NAME:-none}"
+            if [ -n "$NAME" ] && curl -fsSL -o musl.apk "$BASE/$v/main/aarch64/$NAME"; then
+              echo "got $NAME from $v"
               break
             fi
           done
+          test -s musl.apk
           ls -la musl.apk
           mkdir -p out
           tar xzf musl.apk -C out 2>/dev/null || tar xJf musl.apk -C out
