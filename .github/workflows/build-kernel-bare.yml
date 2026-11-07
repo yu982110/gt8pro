@@ -103,6 +103,9 @@ jobs:
           done
           echo "== patch leftovers"
           find . -name '*.rej' -o -name '*.orig' | head -20
+      - name: patch kernel native4k early
+        run: python3 ci/patch-kernel-native4k-early.py hakios/xnu-src/xnu-8796.121.2
+
       - name: patch kernel native4k probe
         run: python3 ci/patch-kernel-native4k-probe.py hakios/xnu-src/xnu-8796.121.2
 
