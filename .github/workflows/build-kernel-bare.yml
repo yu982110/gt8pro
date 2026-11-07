@@ -109,6 +109,9 @@ jobs:
       - name: patch kernel native4k probe
         run: python3 ci/patch-kernel-native4k-probe.py hakios/xnu-src/xnu-8796.121.2
 
+      - name: patch kernel shared region probe
+        run: python3 ci/patch-kernel-shared-region-probe.py hakios/xnu-src/xnu-8796.121.2
+
       - name: patch kernel framebuffer (the only patch in this build)
         run: python3 ci/patch-kernel-fb.py hakios/xnu-src/xnu-8796.121.2
 
