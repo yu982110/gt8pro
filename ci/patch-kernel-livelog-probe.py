@@ -86,6 +86,15 @@ ANCHORS = [
     (KSTARTUP, "\tclock_service_create();\n", probe("AL clock_service_create returned"), "after"),
     (KSTARTUP, "\tdevice_service_create();\n", probe("AM device_service_create returned"), "after"),
     (KSTARTUP, "\tphys_carveout_init();\n", probe("AN phys_carveout_init returned"), "after"),
+    # ---- the five calls between phys_carveout_init() and PE_init_iokit() ----
+    (KSTARTUP, "\tkdp_init();\n", probe("AW kdp_init returned"), "after"),
+    (KSTARTUP, "\talternate_debugger_init();\n", probe("AX alternate_debugger_init returned"), "after"),
+    (KSTARTUP, "\thv_support_init();\n", probe("AY hv_support_init returned"), "after"),
+    (KSTARTUP, "\tbootprofile_init();\n", probe("AZ bootprofile_init returned"), "after"),
+    (KSTARTUP, "\tkernel_startup_initialize_upto(STARTUP_SUB_SYSCTL);\n",
+     probe("BA before startup_initialize(SYSCTL)")
+     + "\tkernel_startup_initialize_upto(STARTUP_SUB_SYSCTL);\n"
+     + probe("BB after startup_initialize(SYSCTL)"), "replace"),
     # PE_init_iokit() is the big one: it is where the platform expert and our display driver live
     (KSTARTUP, "\tPE_init_iokit();\n",
      probe("AO before PE_init_iokit") + "\tPE_init_iokit();\n" + probe("AP PE_init_iokit returned"),
@@ -93,6 +102,10 @@ ANCHORS = [
     (KSTARTUP, "\tinitialize_screen(NULL, kPEAcquireScreen);\n",
      probe("AQ before initialize_screen") + "\tinitialize_screen(NULL, kPEAcquireScreen);\n"
      + probe("AR initialize_screen returned"), "replace"),
+    (KSTARTUP, "\tkernel_startup_initialize_upto(STARTUP_SUB_EARLY_BOOT);\n",
+     probe("BC before startup_initialize(EARLY_BOOT)")
+     + "\tkernel_startup_initialize_upto(STARTUP_SUB_EARLY_BOOT);\n"
+     + probe("BD after startup_initialize(EARLY_BOOT)"), "replace"),
     (KSTARTUP, "\tvm_commpage_init();\n", probe("AS vm_commpage_init returned"), "after"),
     (KSTARTUP, "\tmachine_lockdown();\n", probe("AT machine_lockdown returned"), "after"),
     (KSTARTUP, "\tPE_lockdown_iokit();\n", probe("AU PE_lockdown_iokit returned"), "after"),
