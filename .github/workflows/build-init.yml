@@ -1,0 +1,82 @@
+name: build lafa init
+
+# init.c ends up in root.apfs, the 4 MiB image that travels in the boot payload next to the kernel.
+# build.sh skips compiling when it cannot find ld64:
+#
+#     [ -z "$PREBUILT" ] && ! command -v ld64 && PREBUILT=1
+#
+# and that is why an edit to init.c silently does nothing on the Windows side: there is no Mach-O
+# linker there, so the build copies the old prebuilt binaries. The CI images have no "ld64" either,
+# but the theos toolchain's "ld" *is* ld64, so a symlink is enough to make build.sh compile.
+#
+# This job builds two things and uploads them:
+#   - obj/init          the one binary this change is about, ready to drop into userland/root/sbin/
+#   - mini.o, start.o   its two freestanding objects, in case those are stale on the other side
+# Repacking root.apfs is left to the machine that has the full userland/root tree.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  init:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+
+    steps:
+      - name: checkout (device package + this workflow)
+        uses: actions/checkout@v4
+
+      - name: theos + Linux toolchain + iPhoneOS16.5 SDK
+        run: |
+          set -euo pipefail
+          git clone --recursive --depth 1 https://github.com/theos/theos.git "$HOME/theos"
+          mkdir -p "$HOME/theos/toolchain"
+          TC=https://github.com/L1ghtmann/llvm-project/releases
+          curl -fsSL "$TC/download/test-210562a/iOSToolchain-x86_64.tar.xz" | tar -xJ -C "$HOME/theos/toolchain/" || \
+            curl -fsSL "$TC/latest/download/iOSToolchain-x86_64.tar.xz" | tar -xJ -C "$HOME/theos/toolchain/"
+          test -x "$HOME/theos/toolchain/linux/iphone/bin/ld"
+          git clone --depth 1 --filter=blob:none --sparse https://github.com/theos/sdks.git "$HOME/theos/sdks-git"
+          git -C "$HOME/theos/sdks-git" sparse-checkout set iPhoneOS16.5.sdk
+          mkdir -p "$HOME/theos/sdks"
+          ln -sfn "$HOME/theos/sdks-git/iPhoneOS16.5.sdk" "$HOME/theos/sdks/iPhoneOS16.5.sdk"
+
+      - name: hakios source
+        run: |
+          set -euo pipefail
+          git clone --depth 1 https://github.com/oosexgang/hakios-xnu-kernel.git hakios
+          ls hakios/userland/libmini
+
+      - name: toolchain shims (ld64 -> theos ld, xnu-clang -> theos clang)
+        run: |
+          set -euo pipefail
+          TC="$HOME/theos/toolchain/linux/iphone/bin"
+          ls "$TC" | tr '\n' ' '; echo
+          sudo ln -sf "$TC/ld" /usr/local/bin/ld64
+          sudo ln -sf "$TC/clang" /usr/local/bin/xnu-clang
+          ld64 -v 2>&1 | head -2 || true
+          xnu-clang --version 2>&1 | head -2 || true
+
+      - name: compile init (freestanding, libmini)
+        run: |
+          set -euo pipefail
+          export PATH="$HOME/theos/toolchain/linux/iphone/bin:$PATH"
+          cd hakios/userland
+          CC="xnu-clang -arch arm64 -Os -static -nostdlib -ffreestanding -fno-stack-protector -fno-builtin -Wall -Wextra"
+          LD="-Wl,-e,_start -Wl,-pagezero_size,0x100000000"
+          $CC -Ilibmini -c libmini/mini.c -o mini.o
+          $CC -c libmini/start.S -o start.o
+          $CC -Ilibmini $LD -o obj/init src/init.c mini.o start.o
+          ls -l obj/init mini.o start.o
+          echo "--- does it carry the new prints? ---"
+          grep -ac 'cache probe' obj/init || echo 0
+          grep -ac 'the shared cache is where dyld looks for it' obj/init || echo 0
+
+      - name: upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: lafa-init
+          path: |
+            hakios/userland/obj/init
+            hakios/userland/mini.o
+            hakios/userland/start.o
+          if-no-files-found: error
