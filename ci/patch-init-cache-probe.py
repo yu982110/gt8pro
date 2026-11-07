@@ -62,6 +62,32 @@ NEW = """	mount_cryptex("OS", ",c=1", devpath);
 	check(bind_dir("/private/preboot/redwood", "/redwood"), "this image back on /redwood");
 """
 
+# The checks print one line each and the kernel console scrolls fast; by the time the screen is
+# looked at, the block above is long gone. Print it again after the final tally, so it is the tail.
+TAIL_ANCHOR = '\tprintf("\\n=== %d checks, %d failed ===\\n", checks, failures);\n'
+
+TAIL_NEW = '''\tprintf("\\n=== %d checks, %d failed ===\\n", checks, failures);
+\t/* HAKIOS-CACHE-PROBE: again, last, so these are the tail of the screen at handover. */
+\t{
+\t\tstatic const char *const tail_paths[] = {
+\t\t\t"/System/Library/Caches/com.apple.dyld/dyld_shared_cache_arm64",
+\t\t\t"/System/Cryptexes/OS/System/Library/Caches/com.apple.dyld/dyld_shared_cache_arm64",
+\t\t\t"/private/preboot/Cryptexes/OS/System/Library/Caches/com.apple.dyld/dyld_shared_cache_arm64",
+\t\t};
+\t\tunsigned k;
+
+\t\tfor (k = 0; k < sizeof(tail_paths) / sizeof(tail_paths[0]); k++) {
+\t\t\tstruct stat tst;
+
+\t\t\tif (stat(tail_paths[k], &tst) == 0) {
+\t\t\t\tprintf("  cache tail: %s -> %lld\\\\n", tail_paths[k], (long long)tst.st_size);
+\t\t\t} else {
+\t\t\t\tprintf("  cache tail: %s -> %s\\\\n", tail_paths[k], strerror(errno));
+\t\t\t}
+\t\t}
+\t}
+'''
+
 
 def main(root):
     f = pathlib.Path(root) / "userland/src/init.c"
@@ -76,6 +102,12 @@ def main(root):
         print("patch-init-cache-probe: MISS: the cryptex mount block is not the expected shape")
         return 1
     text = text.replace(ANCHOR, NEW, 1)
+    if TAIL_ANCHOR in text:
+        text = text.replace(TAIL_ANCHOR, TAIL_NEW, 1)
+        print("patch-init-cache-probe: tail print after the check tally")
+    else:
+        print("patch-init-cache-probe: MISS: the final tally printf is not where expected")
+        return 1
     f.write_text(text, errors="surrogateescape")
     print("patch-init-cache-probe: init now prints where the shared cache is")
     return 0
