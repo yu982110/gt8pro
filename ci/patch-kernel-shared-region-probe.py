@@ -28,16 +28,21 @@ import sys
 
 MARK = "HAKIOS-SR-PROBE"
 
-FN_ANCHOR = """int
+# the definition starts "static int\n_shared_region_map_and_slide(" -- the static must stay glued
+# to int, so the declaration block goes in front of both, and the static variant is tried first
+FN_ANCHORS = (
+    """static int
 _shared_region_map_and_slide(
-"""
+""",
+    """int
+_shared_region_map_and_slide(
+""",
+)
 
-FN_NEW = """/* HAKIOS-SR-PROBE: loader_log_line writes to the loader's ring, which is on screen. */
+FN_PREFIX = """/* HAKIOS-SR-PROBE: loader_log_line writes to the loader's ring, which is on screen. */
 #include <libkern/libkern.h>
 extern void loader_log_line(const char *line);
 
-int
-_shared_region_map_and_slide(
 """
 
 ENTRY_ANCHOR = """	/*
@@ -99,8 +104,16 @@ def main(root):
         return 0
 
     bad = 0
+    for anchor in FN_ANCHORS:
+        if anchor in text:
+            text = text.replace(anchor, FN_PREFIX + anchor, 1)
+            print("patch-sr-probe: declaration")
+            break
+    else:
+        print("patch-sr-probe: MISS: declaration (function definition not found)")
+        bad = 1
+
     for anchor, new, what in (
-        (FN_ANCHOR, FN_NEW, "declaration"),
         (ENTRY_ANCHOR, ENTRY_NEW, "entry + setup prints"),
         (MAP_ANCHOR, MAP_NEW, "map_file print"),
     ):
