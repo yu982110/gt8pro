@@ -81,8 +81,12 @@ def patch(root):
 
     # helpers go after the last include: they use round_page() and ml_io_map_unmappable() with
     # their own declarations, so their position among the functions does not matter
-    # at the top of the file: bsd_init() calls them, and C wants them declared first
-    text = HELPERS + "\n" + text
+    # after the includes: bsd_init() calls them, and C wants them before the call, but they use
+    # vm_offset_t/uint32_t, which the includes bring in
+    inc = 0
+    for m in re.finditer(r'^#include[^\n]*\n', text, re.M):
+        inc = m.end()
+    text = text[:inc] + "\n" + HELPERS + text[inc:]
 
     # orange right before the mount, yellow right after it returns
     m = CALL_RE.search(text)
