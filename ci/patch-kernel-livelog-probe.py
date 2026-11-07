@@ -86,11 +86,10 @@ ANCHORS = [
     (KSTARTUP, "\tclock_service_create();\n", probe("AL clock_service_create returned"), "after"),
     (KSTARTUP, "\tdevice_service_create();\n", probe("AM device_service_create returned"), "after"),
     (KSTARTUP, "\tphys_carveout_init();\n", probe("AN phys_carveout_init returned"), "after"),
-    # ---- the five calls between phys_carveout_init() and PE_init_iokit() ----
-    (KSTARTUP, "\tkdp_init();\n", probe("AW kdp_init returned"), "after"),
-    (KSTARTUP, "\talternate_debugger_init();\n", probe("AX alternate_debugger_init returned"), "after"),
-    (KSTARTUP, "\thv_support_init();\n", probe("AY hv_support_init returned"), "after"),
-    (KSTARTUP, "\tbootprofile_init();\n", probe("AZ bootprofile_init returned"), "after"),
+    # ---- the calls between phys_carveout_init() and PE_init_iokit() ----
+    # (kdp_init / alternate_debugger_init / hv_support_init / bootprofile_init are skipped by
+    #  patch-kernel-skip-debug-init.py, so they must not be probed here: a probe inside those
+    #  #ifdef blocks would make that patch's anchor stop matching.)
     (KSTARTUP, "\tkernel_startup_initialize_upto(STARTUP_SUB_SYSCTL);\n",
      probe("BA before startup_initialize(SYSCTL)")
      + "\tkernel_startup_initialize_upto(STARTUP_SUB_SYSCTL);\n"
