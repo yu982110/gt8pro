@@ -81,12 +81,17 @@ def patch(root):
 
     # helpers go after the last include: they use round_page() and ml_io_map_unmappable() with
     # their own declarations, so their position among the functions does not matter
-    # after the includes: bsd_init() calls them, and C wants them before the call, but they use
-    # vm_offset_t/uint32_t, which the includes bring in
-    inc = 0
-    for m in re.finditer(r'^#include[^\n]*\n', text, re.M):
-        inc = m.end()
-    text = text[:inc] + "\n" + HELPERS + text[inc:]
+    # just before bsd_init() itself: its includes are scattered through the file, and the last of
+    # them comes after the function, so an include-based offset puts the helpers out of scope
+    anchor2 = CALL_RE.search(text)
+    fn = text.rfind("bsd_init(void)", 0, anchor2.start())
+    if fn < 0:
+        print("patch-fbmarks: bsd_init's definition not found")
+        return 1
+    line = text.rfind("\n", 0, fn)
+    if line < 0:
+        line = 0
+    text = text[:line] + "\n" + HELPERS + text[line:]
 
     # orange right before the mount, yellow right after it returns
     m = CALL_RE.search(text)
