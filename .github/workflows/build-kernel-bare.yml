@@ -83,6 +83,9 @@ jobs:
       - name: patch kernel startup probes
         run: python3 ci/patch-kernel-startup-probe.py hakios/xnu-src/xnu-8796.121.2
 
+      - name: patch kernel GIC redistributor stride
+        run: python3 ci/patch-kernel-gicr.py hakios/xnu-src/xnu-8796.121.2
+
       - name: build kernel
         run: |
           cd hakios
