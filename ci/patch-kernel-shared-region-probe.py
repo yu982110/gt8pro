@@ -17,7 +17,9 @@ _shared_region_map_and_slide() has only two places that can fail:
     kr = vm_shared_region_map_file(...);                 <- the actual mapping
     if (kr != KERN_SUCCESS) { trace... }
 
-This prints the result of both, so one boot says which half fails and with what.
+The prints go through loader_log_line(), not kprintf(): it writes into the loader's own ring
+buffer, which is what the loader draws on screen and persists to hybridswap, so the numbers are
+visible on the spot instead of needing a reboot into Android to read the kernel log.
 
     python3 ci/patch-kernel-shared-region-probe.py <xnu tree>
 """
@@ -25,6 +27,18 @@ import pathlib
 import sys
 
 MARK = "HAKIOS-SR-PROBE"
+
+FN_ANCHOR = """int
+_shared_region_map_and_slide(
+"""
+
+FN_NEW = """/* HAKIOS-SR-PROBE: loader_log_line writes to the loader's ring, which is on screen. */
+#include <libkern/libkern.h>
+extern void loader_log_line(const char *line);
+
+int
+_shared_region_map_and_slide(
+"""
 
 ENTRY_ANCHOR = """	/*
 	 * Turn files, mappings into sr_file_mappings and other setup.
@@ -38,13 +52,23 @@ ENTRY_ANCHOR = """	/*
 ENTRY_NEW = """	/*
 	 * Turn files, mappings into sr_file_mappings and other setup.
 	 */
-	/* HAKIOS-SR-PROBE: the syscall was reached; how many files and mappings came with it. */
-	kprintf("hakios sr: map_and_slide pid %d files %u mappings %u\\n",
-	    proc_getpid(p), files_count, mappings_count);
+	{
+		/* HAKIOS-SR-PROBE: the syscall was reached at all. */
+		char probe_buf[128];
+
+		snprintf(probe_buf, sizeof(probe_buf), "probe: sr entry pid %d files %u maps %u\\n",
+		    proc_getpid(p), files_count, mappings_count);
+		loader_log_line(probe_buf);
+	}
 	error = shared_region_map_and_slide_setup(p, files_count,
 	    files, mappings_count, mappings,
 	    &sr_file_mappings, &shared_region, rdir_vp);
-	kprintf("hakios sr: setup returned %d\\n", error);
+	{
+		char probe_buf[96];
+
+		snprintf(probe_buf, sizeof(probe_buf), "probe: sr setup -> %d\\n", error);
+		loader_log_line(probe_buf);
+	}
 	if (error != 0) {
 """
 
@@ -53,8 +77,13 @@ MAP_ANCHOR = """	kr = vm_shared_region_map_file(shared_region, files_count, sr_f
 """
 
 MAP_NEW = """	kr = vm_shared_region_map_file(shared_region, files_count, sr_file_mappings);
-	/* HAKIOS-SR-PROBE: the mapping half, 0 would mean the cache is in. */
-	kprintf("hakios sr: map_file returned 0x%x\\n", (unsigned)kr);
+	{
+		/* HAKIOS-SR-PROBE: 0 would mean the cache is mapped. */
+		char probe_buf[96];
+
+		snprintf(probe_buf, sizeof(probe_buf), "probe: sr map_file -> 0x%x\\n", (unsigned)kr);
+		loader_log_line(probe_buf);
+	}
 	if (kr != KERN_SUCCESS) {
 """
 
@@ -71,6 +100,7 @@ def main(root):
 
     bad = 0
     for anchor, new, what in (
+        (FN_ANCHOR, FN_NEW, "declaration"),
         (ENTRY_ANCHOR, ENTRY_NEW, "entry + setup prints"),
         (MAP_ANCHOR, MAP_NEW, "map_file print"),
     ):
