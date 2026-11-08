@@ -113,6 +113,15 @@ jobs:
       - name: patch kernel shared cache config
         run: python3 ci/patch-kernel-sharedcache-config.py hakios
 
+      - name: patch kernel shared-region probe
+        run: python3 ci/patch-kernel-shared-region-probe.py hakios/xnu-src/xnu-8796.121.2
+
+      - name: patch kernel native4k probe
+        run: python3 ci/patch-kernel-native4k-probe.py hakios/xnu-src/xnu-8796.121.2
+
+      - name: patch kernel addfilesigs probe
+        run: python3 ci/patch-kernel-addfilesigs-probe.py hakios/xnu-src/xnu-8796.121.2
+
       - name: patch kernel initwait
         run: python3 ci/patch-kernel-initwait.py hakios/xnu-src/xnu-8796.121.2
 
