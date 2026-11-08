@@ -98,7 +98,10 @@ jobs:
                    $GITHUB_WORKSPACE/ci/0105-unixnu-native-4k-signature-hash-cache.patch \
                    $GITHUB_WORKSPACE/ci/0106-pandora-4k-build-fixes.patch \
                    $GITHUB_WORKSPACE/ci/0107-pandora-ios-address-layout.patch \
-                   $GITHUB_WORKSPACE/ci/0127-pandora-cs-native4k-1mib-reads.patch ; do
+                   $GITHUB_WORKSPACE/ci/0127-pandora-cs-native4k-1mib-reads.patch \
+                   $GITHUB_WORKSPACE/ci/0036-sweet-amfi-cs-signed.patch \
+                   $GITHUB_WORKSPACE/ci/0151-pandora-original-amfi-early-init.patch \
+                   $GITHUB_WORKSPACE/ci/0152-pandora-sweet-amfi-prelink-check.patch ; do
             echo "== $(basename $p)"
             patch -p1 -N --fuzz=3 --no-backup-if-mismatch < "$p"
           done
