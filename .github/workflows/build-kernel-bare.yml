@@ -93,11 +93,16 @@ jobs:
           # git apply is strict about the index and about context; these patches were made against
           # a differently patched tree, so use patch(1) with fuzz, and keep going if one hunk is
           # already there (--forward) or reversed (--reverse-safe is not a thing; -N does that).
-          for p in $GITHUB_WORKSPACE/ci/0103-unixnu-native-4k-bootstrap-capacity.patch \
+          for p in $GITHUB_WORKSPACE/ci/0028-sweet-ufs-root-device.patch \
+                   $GITHUB_WORKSPACE/ci/0030-sweet-ufs-writes.patch \
+                   $GITHUB_WORKSPACE/ci/0088-fuxi-extent-root.patch \
+                   $GITHUB_WORKSPACE/ci/0103-unixnu-native-4k-bootstrap-capacity.patch \
                    $GITHUB_WORKSPACE/ci/0104-unixnu-native-4k-user-abi.patch \
                    $GITHUB_WORKSPACE/ci/0105-unixnu-native-4k-signature-hash-cache.patch \
                    $GITHUB_WORKSPACE/ci/0106-pandora-4k-build-fixes.patch \
                    $GITHUB_WORKSPACE/ci/0107-pandora-ios-address-layout.patch \
+                   $GITHUB_WORKSPACE/ci/0120-pandora-ufs-driver-init.patch \
+                   $GITHUB_WORKSPACE/ci/0122-pandora-extent-table-16k-binary-search.patch \
                    $GITHUB_WORKSPACE/ci/0127-pandora-cs-native4k-1mib-reads.patch \
                    $GITHUB_WORKSPACE/ci/0036-sweet-amfi-cs-signed.patch \
                    $GITHUB_WORKSPACE/ci/0151-pandora-original-amfi-early-init.patch \
