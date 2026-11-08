@@ -18,10 +18,10 @@ import sys
 
 MARK = "HAKIOS-RAMFS"
 
-ANCHOR = """	if (!flash_root_mode) {
+ANCHOR = """	if (flash_root_mode && strcmp(argv[1], "/sbin/launchd.darwin") == 0) {
 """
 
-NEW = """	if (!flash_root_mode) {
+NEW = """	if (flash_root_mode && strcmp(argv[1], "/sbin/launchd.darwin") == 0) {
 		/*
 		 * HAKIOS-RAMFS: launchd's boot tasks want a writable /private/var; the image is
 		 * read only. With hakios_ramfs=1, mount a memory filesystem over it (empty at
