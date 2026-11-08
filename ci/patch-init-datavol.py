@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
-"""patch-init-datavol.py -- mount the image's Data volume before launchd takes over.
+"""patch-init-datavol.py -- mount the image's Data volume, switchable by boot-arg.
 
-launchd's built-in boot task (restore-datapartition) does the task, fails and retries forever:
-there is no data volume. The kernel's APFS mount takes "DEVICE[,c=N][,v=M]" (see
-apfs_vfsops.c, "the container (from 0) and the volume (by index)"), so the second volume of the
-image's own container - volume 1, the Data volume built by mkapfs - can be mounted in init:
+launchd's built-in boot task (restore-datapartition) does the task and then the kernel goes
+silent: either the task itself hangs, or it fights with a mount this init made. To tell those
+apart without rebuilding init every time, the mount is behind a boot-arg:
+
+    hakios_datavol=0   do not mount it (ramfs on /private/var only)
+
+The kernel's APFS mount takes "DEVICE[,c=N][,v=M]" (apfs_vfsops.c, "the container (from 0) and
+the volume (by index)"), so the second volume of the image's container is:
 
     mount("apfs", "/System/Volumes/Data", 0, "/dev/md0,v=1")
-
-The mount point must exist in the System volume (read only), and this is best effort: failures
-are printed, never fatal.
 
     python3 ci/patch-init-datavol.py <userland dir>
 """
@@ -25,19 +26,21 @@ ANCHOR = """	if (!flash_root_mode) {
 NEW = """	if (!flash_root_mode) {
 		/*
 		 * HAKIOS-DATAVOL: the image's container has a second volume, Data (mkapfs
-		 * Data=...). launchd's restore-datapartition task needs a data volume and retries
-		 * for ever without one; the kernel's apfs mount takes ",v=<volume index>".
+		 * Data=...). launchd's restore-datapartition task needs a data volume and the
+		 * kernel's apfs mount takes ",v=<volume index>". Boot-arg hakios_datavol=0
+		 * leaves it unmounted, to tell a hang in that task from a mount conflict.
 		 */
 		struct stat dv;
+		const char *dv_mode = boot_arg("hakios_datavol");
 
-		if (stat("/System/Volumes/Data", &dv) == 0) {
-			if (mount("apfs", "/System/Volumes/Data", 0, (void *)"/dev/md0,v=1") == 0) {
-				printf("  data volume on /System/Volumes/Data\\n");
-			} else {
-				printf("  data volume on /System/Volumes/Data: %s\\n", strerror(errno));
-			}
-		} else {
+		if (dv_mode != NULL && dv_mode[0] == '0') {
+			printf("  data volume: not mounted (hakios_datavol=0)\\n");
+		} else if (stat("/System/Volumes/Data", &dv) != 0) {
 			printf("  data volume: no /System/Volumes/Data to mount on\\n");
+		} else if (mount("apfs", "/System/Volumes/Data", 0, (void *)"/dev/md0,v=1") == 0) {
+			printf("  data volume on /System/Volumes/Data\\n");
+		} else {
+			printf("  data volume on /System/Volumes/Data: %s\\n", strerror(errno));
 		}
 	}
 
@@ -60,7 +63,7 @@ def main(root):
         return 1
     text = text.replace(ANCHOR, NEW + ANCHOR, 1)
     f.write_text(text, errors="surrogateescape")
-    print("patch-init-datavol: init mounts /dev/md0,v=1 on /System/Volumes/Data")
+    print("patch-init-datavol: data volume mount behind hakios_datavol")
     return 0
 
 
