@@ -90,7 +90,7 @@ jobs:
           grep -ac 'ramfs on /private/var' obj/init || echo 0
           grep -ac 'data volume on /System/Volumes/Data' obj/init || echo 0
           grep -ac 'HFS+ (read-write, kept between boots)' obj/init || echo 0
-          grep -ac 'raw write to' obj/init || echo 0
+          grep -ac 'darwin_data\[1024\]' obj/init || echo 0
 
       - name: upload
         uses: actions/upload-artifact@v4
