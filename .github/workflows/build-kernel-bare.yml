@@ -145,6 +145,9 @@ jobs:
       - name: patch kernel ufsrw-all
         run: python3 ci/patch-kernel-ufsrw-all.py hakios/xnu-src/xnu-8796.121.2
 
+      - name: patch kernel ufsrw-probe
+        run: python3 ci/patch-kernel-ufsrw-probe.py hakios/xnu-src/xnu-8796.121.2
+
       - name: patch kernel cs nocache
         run: python3 ci/patch-kernel-cs-nocache.py hakios/xnu-src/xnu-8796.121.2
 
