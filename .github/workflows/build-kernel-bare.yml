@@ -112,6 +112,16 @@ jobs:
           done
           echo "== patch leftovers"
           find . -name '*.rej' -o -name '*.orig' | head -20
+      - name: upload sweet_ufs source
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sweet-ufs-source
+          path: |
+            hakios/xnu-src/xnu-8796.121.2/bsd/dev/sweet_ufs.c
+            hakios/xnu-src/xnu-8796.121.2/bsd/dev/sweet_ufs.c.rej
+          if-no-files-found: warn
+
       - name: show patch rejects
         if: always()
         run: |
