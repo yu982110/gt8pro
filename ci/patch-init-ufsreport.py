@@ -26,13 +26,7 @@ NEW = ANCHOR + """	/*
 	printf("\\n\\n===== /private/var is %s =====\\n",
 	    var_kept ? "HFS+ (read-write, kept between boots)" : "MEMORY FS (the HFS+ mount failed)");
 	printf("===== hask_ufsreport done, 5 s =====\\n\\n");
-	{
-		volatile unsigned long hakios_spin = 0;
-
-		while (hakios_spin < 400000000UL) {
-			hakios_spin++;
-		}
-	}
+	usleep(5000000);
 """
 
 
