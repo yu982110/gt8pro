@@ -64,13 +64,7 @@ NEW = ANCHOR + """	/*
 		printf("\\n\\n===== raw write to %s: %s (errno %d) =====\\n", hakios_dev,
 		    hakios_ok ? "PASS" : "FAIL", hakios_err);
 		printf("===== hold 5 s =====\\n\\n");
-		{
-			volatile unsigned long hakios_spin = 0;
-
-			while (hakios_spin < 400000000UL) {
-				hakios_spin++;
-			}
-		}
+		usleep(5000000);
 	}
 """
 
