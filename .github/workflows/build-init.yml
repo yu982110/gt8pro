@@ -52,6 +52,7 @@ jobs:
           python3 ci/patch-init-ramfs.py hakios/userland
           python3 ci/patch-init-datavol.py hakios/userland
           python3 ci/patch-init-ufsreport.py hakios/userland
+          python3 ci/patch-init-rawtest.py hakios/userland
 
       - name: toolchain shims (ld64 -> theos ld, xnu-clang -> theos clang -target arm64)
         run: |
@@ -89,6 +90,7 @@ jobs:
           grep -ac 'ramfs on /private/var' obj/init || echo 0
           grep -ac 'data volume on /System/Volumes/Data' obj/init || echo 0
           grep -ac 'HFS+ (read-write, kept between boots)' obj/init || echo 0
+          grep -ac 'raw write to' obj/init || echo 0
 
       - name: upload
         uses: actions/upload-artifact@v4
