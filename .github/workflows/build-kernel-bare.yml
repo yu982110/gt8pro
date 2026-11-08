@@ -106,6 +106,9 @@ jobs:
       - name: patch kernel native4k early
         run: python3 ci/patch-kernel-native4k-early.py hakios/xnu-src/xnu-8796.121.2
 
+      - name: patch kernel shared cache config
+        run: python3 ci/patch-kernel-sharedcache-config.py hakios
+
       - name: patch kernel initwait
         run: python3 ci/patch-kernel-initwait.py hakios/xnu-src/xnu-8796.121.2
 
