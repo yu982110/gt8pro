@@ -112,6 +112,14 @@ jobs:
           done
           echo "== patch leftovers"
           find . -name '*.rej' -o -name '*.orig' | head -20
+      - name: show patch rejects
+        if: always()
+        run: |
+          set +e
+          find . -name '*.rej' | head -20
+          for f in $(find . -name '*.rej' | head -6); do echo "=== $f"; cat "$f"; done | head -260
+          echo '=== end of rejects ==='
+
       - name: patch kernel native4k early
         run: python3 ci/patch-kernel-native4k-early.py hakios/xnu-src/xnu-8796.121.2
 
