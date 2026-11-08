@@ -19,11 +19,10 @@ import sys
 
 MARK = "HAKIOS-DATAVOL"
 
-ANCHOR = """	if (!flash_root_mode) {
-		/*
-		 * HAKIOS-RAMFS:"""
+ANCHOR = """	if (flash_root_mode && strcmp(argv[1], "/sbin/launchd.darwin") == 0) {
+"""
 
-NEW = """	if (!flash_root_mode) {
+NEW = """	if (flash_root_mode && strcmp(argv[1], "/sbin/launchd.darwin") == 0) {
 		/*
 		 * HAKIOS-DATAVOL: the image's container has a second volume, Data (mkapfs
 		 * Data=...). launchd's restore-datapartition task needs a data volume and the
