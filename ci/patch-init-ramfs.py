@@ -19,8 +19,7 @@ import sys
 MARK = "HAKIOS-RAMFS"
 
 ANCHOR = """	if (!flash_root_mode) {
-		/*
-		 * HAKIOS-DATAVOL:"""
+"""
 
 NEW = """	if (!flash_root_mode) {
 		/*
