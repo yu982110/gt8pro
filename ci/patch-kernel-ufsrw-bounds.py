@@ -1,20 +1,17 @@
 #!/usr/bin/env python3
-"""patch-kernel-ufsrw-bounds.py -- make ufsrw_all=1 lift the partition bounds too.
+"""patch-kernel-ufsrw-bounds.py -- ufsrw_all=1 lifts the partition bounds in ufs_write_blocks.
 
-sweet_ufs.c's ufs_write_blocks() has two variants. With FUXI it checks fx_write_allowed() (the
-extent allowlist, which patch-kernel-ufsrw-all.py widens); without FUXI it checks the write lies
-inside the partition the driver was initialised for:
+sweet_ufs.c's ufs_write_blocks() has two variants. With FUXI it checks fx_write_allowed(); without
+FUXI it checks the write lies inside the partition the driver was initialised for:
 
-    if (!su.writable || !su.nblocks || count == 0 || count > BOUNCE_SIZE / UFS_BLOCK ||
-        lba < su.first_block || lba - su.first_block >= su.nblocks ||
-        count > su.nblocks - (lba - su.first_block) || lba + count - 1 > UINT32_MAX) {
+	if (!su.writable || !su.nblocks || count == 0 || count > BOUNCE_SIZE / UFS_BLOCK ||
+	    lba < su.first_block || lba - su.first_block >= su.nblocks ||
+	    count > su.nblocks - (lba - su.first_block) || lba + count - 1 > UINT32_MAX) {
 
-The port boots without FUXI, so the HFS+ volume on oplusreserve2 (a partition of its own) fails
-that test and mount() comes back EROFS - which is why /private/var falls back to a memory
-filesystem and launchd's restore-datapartition never has a data volume.
-
-With boot-arg ufsrw_all=1 the partition bounds are skipped (the bounce size and the 32-bit LBA
-limit still hold). Same boot-arg as patch-kernel-ufsrw-all.py; both are needed.
+The port boots without FUXI and the HFS+ data volume lives on oplusreserve2, a partition of its
+own, so every write the HFS driver makes while mounting read-write (journal init first) is
+refused. With boot-arg ufsrw_all=1 the partition bounds are skipped; the bounce size and the
+32-bit LBA limit still hold, so nothing outside one transfer can run away.
 
     python3 ci/patch-kernel-ufsrw-bounds.py <xnu tree>
 """
@@ -23,38 +20,30 @@ import sys
 
 MARK = "HAKIOS-ANYWRITE-BOUNDS"
 
-ANCHOR = """	uint64_t
-	ufs_write_blocks(uint64_t lba, uint32_t count)
-"""
-
-HELPER = """/*
- * HAKIOS-ANYWRITE-BOUNDS: ufsrw_all=1 allows writes outside the partition the driver was
- * initialised for (the HFS+ volume for /private/var is on oplusreserve2).
- */
-static bool
-hakios_anywrite(void)
+FUNC_ANCHOR = """ufs_write_blocks(uint64_t lba, uint32_t count)
 {
-	uint32_t any = 0;
-
-	return PE_parse_boot_argn("ufsrw_all", &any, sizeof(any)) && any != 0;
-}
-
-	uint64_t
-	ufs_write_blocks(uint64_t lba, uint32_t count)
 """
 
-COND_OLD = """	if (!su.writable || !su.nblocks || count == 0 || count > BOUNCE_SIZE / UFS_BLOCK ||
+FUNC_NEW = FUNC_ANCHOR + """	bool hakios_any = false;
+	{
+		uint32_t hakios_any_arg = 0;
+
+		/* HAKIOS-ANYWRITE-BOUNDS: ufsrw_all=1 skips the partition bounds below. */
+		hakios_any = PE_parse_boot_argn("ufsrw_all", &hakios_any_arg,
+		    sizeof(hakios_any_arg)) && hakios_any_arg != 0;
+	}
+"""
+
+COND_ANCHOR = """	if (!su.writable || !su.nblocks || count == 0 || count > BOUNCE_SIZE / UFS_BLOCK ||
 	    lba < su.first_block || lba - su.first_block >= su.nblocks ||
 	    count > su.nblocks - (lba - su.first_block) || lba + count - 1 > UINT32_MAX) {
 """
 
-COND_NEW = """	if (!su.writable ||
-	    (!hakios_anywrite() && (!su.nblocks || count == 0 ||
-	     count > BOUNCE_SIZE / UFS_BLOCK ||
+COND_NEW = """	if (!su.writable || lba + count - 1 > UINT32_MAX ||
+	    (hakios_any && (count == 0 || count > BOUNCE_SIZE / UFS_BLOCK)) ||
+	    (!hakios_any && (!su.nblocks || count == 0 || count > BOUNCE_SIZE / UFS_BLOCK ||
 	     lba < su.first_block || lba - su.first_block >= su.nblocks ||
-	     count > su.nblocks - (lba - su.first_block))) ||
-	    (hakios_anywrite() && (count == 0 || count > BOUNCE_SIZE / UFS_BLOCK)) ||
-	    lba + count - 1 > UINT32_MAX) {
+	     count > su.nblocks - (lba - su.first_block)))) {
 """
 
 
@@ -67,16 +56,16 @@ def main(root):
     if MARK in text:
         print("patch-ufsrw-bounds: already applied")
         return 0
-    if text.count(ANCHOR) != 1:
+    if text.count(FUNC_ANCHOR) != 1:
         print("patch-ufsrw-bounds: MISS: ufs_write_blocks header appears %d times"
-              % text.count(ANCHOR))
+              % text.count(FUNC_ANCHOR))
         return 1
-    if text.count(COND_OLD) != 1:
+    if text.count(COND_ANCHOR) != 1:
         print("patch-ufsrw-bounds: MISS: the bounds condition appears %d times"
-              % text.count(COND_OLD))
+              % text.count(COND_ANCHOR))
         return 1
-    text = text.replace(ANCHOR, HELPER, 1)
-    text = text.replace(COND_OLD, COND_NEW, 1)
+    text = text.replace(FUNC_ANCHOR, FUNC_NEW, 1)
+    text = text.replace(COND_ANCHOR, COND_NEW, 1)
     f.write_text(text, errors="surrogateescape")
     print("patch-ufsrw-bounds: ufsrw_all=1 skips the partition bounds in ufs_write_blocks")
     return 0
