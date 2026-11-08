@@ -50,6 +50,7 @@ jobs:
         run: |
           python3 ci/patch-init-cache-probe.py hakios
           python3 ci/patch-init-ramfs.py hakios/userland
+          python3 ci/patch-init-datavol.py hakios/userland
 
       - name: toolchain shims (ld64 -> theos ld, xnu-clang -> theos clang -target arm64)
         run: |
@@ -85,6 +86,7 @@ jobs:
           grep -ac 'cache probe' obj/init || echo 0
           grep -ac 'the shared cache is where dyld looks for it' obj/init || echo 0
           grep -ac 'ramfs on /private/var' obj/init || echo 0
+          grep -ac 'data volume on /System/Volumes/Data' obj/init || echo 0
 
       - name: upload
         uses: actions/upload-artifact@v4
