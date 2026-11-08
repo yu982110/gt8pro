@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
-"""patch-init-ramfs.py -- give launchd writable space before it takes over.
+"""patch-init-ramfs.py -- fallback writable /private/var, behind a boot-arg.
 
-The port boots into Darwin's launchd (the cache loads, the bootstrapper comes up), and then
-launchd's first boot task - (restore-datapartition) - ends in a userspace reboot because there
-is no data volume and /private/var cannot be written: the image is read only.
+launchd's boot tasks want a writable /private/var. Two ways to give it one:
 
-The kernel has RAMFS. Mounting it over /private/var (and /System/Volumes/Data when that
-directory exists) before the exec gives launchd a writable place to put its state without
-changing the image. Both mounts are best-effort and are reported on the console.
+  * var_hfs=<partition> - init's own mount_data_volume() mounts a journaled HFS+ volume from
+    the phone's flash there and keeps it between boots (the reference port's arrangement);
+  * RAMFS - a memory filesystem, empty at every boot: enough for a first boot, and the fallback
+    when the HFS+ volume does not mount.
+
+This patch adds the RAMFS fallback, off by default (hakios_ramfs=1 turns it on) so an HFS+ test
+run is not shadowed by it. When it is on, the mounts are best effort and reported on the console.
 
     python3 ci/patch-init-ramfs.py <userland dir>
 """
@@ -16,30 +18,36 @@ import sys
 
 MARK = "HAKIOS-RAMFS"
 
-# The exec of Darwin's launchd happens in the tail of init's main flow, after the checks.
-ANCHOR = """	if (flash_root_mode && strcmp(argv[1], "/sbin/launchd.darwin") == 0) {
-"""
+ANCHOR = """	if (!flash_root_mode) {
+		/*
+		 * HAKIOS-DATAVOL:"""
 
 NEW = """	if (!flash_root_mode) {
 		/*
-		 * HAKIOS-RAMFS: launchd's boot tasks need a writable /private/var (and a data
-		 * volume); the image is read only. RAMFS over them is enough for the first boot
-		 * task and costs no image space. Reported so a failure is visible on the console.
+		 * HAKIOS-RAMFS: launchd's boot tasks want a writable /private/var; the image is
+		 * read only. With hakios_ramfs=1, mount a memory filesystem over it (empty at
+		 * every boot). Default off: var_hfs= gives /private/var a kept HFS+ volume, and
+		 * this must not shadow it. Reported so a failure is visible on the console.
 		 */
-		struct stat st;
+		const char *ramfs_mode = boot_arg("hakios_ramfs");
+		struct stat rst;
 
-		if (stat("/private/var", &st) == 0) {
-			if (mount("ramfs", "/private/var", 0, NULL) == 0) {
-				printf("  ramfs on /private/var\\n");
-			} else {
-				printf("  ramfs on /private/var: %s\\n", strerror(errno));
+		if (ramfs_mode == NULL || ramfs_mode[0] == '0') {
+			printf("  ramfs: off (hakios_ramfs=1 turns the fallback on)\\n");
+		} else {
+			if (stat("/private/var", &rst) == 0) {
+				if (mount("ramfs", "/private/var", 0, NULL) == 0) {
+					printf("  ramfs on /private/var\\n");
+				} else {
+					printf("  ramfs on /private/var: %s\\n", strerror(errno));
+				}
 			}
-		}
-		if (stat("/System/Volumes/Data", &st) == 0) {
-			if (mount("ramfs", "/System/Volumes/Data", 0, NULL) == 0) {
-				printf("  ramfs on /System/Volumes/Data\\n");
-			} else {
-				printf("  ramfs on /System/Volumes/Data: %s\\n", strerror(errno));
+			if (stat("/System/Volumes/Data", &rst) == 0) {
+				if (mount("ramfs", "/System/Volumes/Data", 0, NULL) == 0) {
+					printf("  ramfs on /System/Volumes/Data\\n");
+				} else {
+					printf("  ramfs on /System/Volumes/Data: %s\\n", strerror(errno));
+				}
 			}
 		}
 	}
@@ -59,11 +67,11 @@ def main(root):
         print("patch-init-ramfs: already applied")
         return 0
     if ANCHOR not in text:
-        print("patch-init-ramfs: MISS: the launchd exec is not where expected")
+        print("patch-init-ramfs: MISS: the launchd exec / datavol block is not where expected")
         return 1
     text = text.replace(ANCHOR, NEW + ANCHOR, 1)
     f.write_text(text, errors="surrogateescape")
-    print("patch-init-ramfs: init mounts RAMFS on /private/var before launchd")
+    print("patch-init-ramfs: ramfs behind hakios_ramfs, off by default")
     return 0
 
 
