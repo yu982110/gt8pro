@@ -33,7 +33,7 @@ NEW = """		/*
 
 			if (hakios_ioflag != 0 && hakios_nocache_reported < 4) {
 				hakios_nocache_reported++;
-				printf("HAKIOS: cs hash of %llu bytes with IO_NOCACHE\\n", limit);
+				printf("HAKIOS: cs hash of %llu bytes with IO_NOCACHE\\n", (unsigned long long)limit);
 			}
 			error = vn_rdwr(UIO_READ, vp, (caddr_t)buffer, (int)chunk_length, position,
 			    UIO_SYSSPACE, hakios_ioflag, vfs_context_ucred(vfs_context_current()),
