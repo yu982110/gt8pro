@@ -1404,10 +1404,6 @@ AppleCLCD::scanTick(void)
 """
 
 FB_FREE_ANCHOR = None  # located at run time (see find_free_anchor)
-		IOFree(fScaleScratch, SWEET_FB_SCALE_SCRATCH_BYTES);
-		fScaleScratch = NULL;
-	}
-"""
 FB_FREE_BLOCK = r"""
 	/* HAKIOS-LAFA-DPU: put the pipes back on the ABL's panel memory before this
 	 * service goes away, then let the surfaces go. */
