@@ -1211,7 +1211,7 @@ FB_SWAP_BLOCK = r"""	/*
 
 """
 
-FB_METHODS_ANCHOR = "/* Copy (or enlarge) each enabled layer's surface into the panel memory. */\n"
+FB_METHODS_ANCHOR = "/* Copy (or enlarge)"  # located at run time (see find_methods_anchor)
 FB_METHODS_BLOCK = r"""#if defined(__arm64__)
 /* -------------------------------------------------------------------------
  * HAKIOS-LAFA-DPU: scanout (port of data-a-live 0217's AppleCLCD methods).
@@ -1561,6 +1561,17 @@ def write(path: Path, text: str) -> bool:
     return True
 
 
+def find_methods_anchor(text):
+    """The methods block goes right before the composer of SweetFramebuffer.
+
+    The display patch's two variants word that comment differently, so match its start.
+    """
+    for line in text.splitlines():
+        if line.startswith("/* Copy (or enlarge)") or "surface into the panel memory" in line:
+            return line + "\n"
+    return None
+
+
 def find_lazymap_anchor(text):
     """The DPU hooks go right after the panel-mapped log line of lazyMap().
 
@@ -1643,7 +1654,10 @@ def patched_framebuffer(text: str) -> str:
     text = splice_after(text, anchor, FB_LAZYMAP_BLOCK, FB_REL + "(lazyMap)")
     text = splice_after(text, FB_VSYNC_ANCHOR, FB_VSYNC_BLOCK, FB_REL + "(vsyncFired)")
     text = splice_before(text, FB_SWAP_ANCHOR, FB_SWAP_BLOCK, FB_REL + "(swap)")
-    text = splice_after(text, FB_METHODS_ANCHOR, FB_METHODS_BLOCK, FB_REL + "(methods)")
+    anchor = find_methods_anchor(text)
+    if anchor is None:
+        raise Failure(FB_REL + ": no composer comment to anchor the methods on")
+    text = splice_after(text, anchor, FB_METHODS_BLOCK, FB_REL + "(methods)")
     text = splice_after(text, FB_FREE_ANCHOR, FB_FREE_BLOCK, FB_REL + "(free)")
     return text
 
