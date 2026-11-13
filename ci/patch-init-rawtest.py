@@ -75,6 +75,26 @@ NEW = ANCHOR + """	/*
 		hakios_rec[hakios_len++] = (char)('0' + (var_kept ? 1 : 0));
 		hakios_rec[hakios_len++] = '\\n';
 
+		/* HAKIOS-RAWTEST: also tell the kernel log, if this Darwin has one, so the record
+		 * reaches the loader's persisted log with no screen and no raw device write. */
+		{
+			int hakios_kfd = open("/dev/klog", O_WRONLY, 0);
+
+			if (hakios_kfd >= 0) {
+				(void)write(hakios_kfd, hakios_rec, (size_t)hakios_len);
+				close(hakios_kfd);
+			}
+		}
+		/* HAKIOS-STOP: hakios_stop=1 freezes here, so the screen can be photographed at rest. */
+		{
+			const char *hakios_stop = boot_arg("hakios_stop");
+
+			if (hakios_stop != NULL && hakios_stop[0] == '1') {
+				for (;;) {
+					usleep(1000000);
+				}
+			}
+		}
 		hakios_fd = open(hakios_rec_dev, O_WRONLY, 0);
 		if (hakios_fd < 0) {
 			printf("  record: open %s: %s\\n", hakios_rec_dev, strerror(errno));
