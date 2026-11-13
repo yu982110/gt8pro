@@ -21,7 +21,7 @@ import sys
 
 MARK = "HAKIOS-RAWTEST"
 
-ANCHOR = '\tcheck(ok, "mount a memory filesystem on /private/var");\n'
+ANCHOR = '\tread_whole(in_image("/etc/var.skel"), skeleton, sizeof(skeleton));\n'
 
 NEW = ANCHOR + """	/*
 	 * HAKIOS-RAWTEST: read the HFS+ signature through /dev/ufs_darwin_data (offset 1024), and
@@ -126,7 +126,7 @@ def main(root):
         print("patch-init-rawtest: already applied")
         return 0
     if text.count(ANCHOR) != 1:
-        print("patch-init-rawtest: MISS: the ramfs check line appears %d times"
+        print("patch-init-rawtest: MISS: the var skeleton line appears %d times"
               % text.count(ANCHOR))
         return 1
     text = text.replace(ANCHOR, NEW, 1)
