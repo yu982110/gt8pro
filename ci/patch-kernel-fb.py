@@ -118,11 +118,15 @@ lafa_fb_fill(void)
 	__builtin_arm_dsb(DSB_ISH);
 	printf("lafa-fb: probe ok\n");
 
-	/* P1: only the bottom quarter. The top is where the loader's live drain draws the kernel's
-	 * log, and filling the whole screen would paint over the one thing worth reading. */
-	for (int y = 2352; y < 3136; y++) {
+	/*
+	 * P1: the whole screen, bright red.  This is the display-path test: if the panel turns
+	 * red the framebuffer mapping, the panel's own refresh and the pixel format are all
+	 * proven at once.  The kernel's console paints over the top afterwards, which is fine --
+	 * the colour is still visible around and below the text.
+	 */
+	for (int y = 0; y < 3136; y++) {
 		for (int x = 0; x < 1440; x++) {
-			px[y * 1440 + x] = 0xff204080;
+			px[y * 1440 + x] = 0xff0000ffu;      /* ARGB: opaque red */
 		}
 	}
 	__builtin_arm_dsb(DSB_ISH);
