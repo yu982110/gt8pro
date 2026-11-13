@@ -9,7 +9,13 @@ So init reads the four bytes at offset 1024 of that device - the HFS+ volume sig
 ("H+") when the window is right - and writes a one line report into the free space of userdata
 at the end of the darwin window (1 GiB - 4 KiB), which the host reads with dd from Android:
 
-    		/* HAKIOS-RAWTEST: is the /usr payload volume in place, and is HorizonSetup there? */
+    		/* HAKIOS-RAWTEST: what launchd reads to decide whether this is a RAM disk. */
+		{
+			const char *rd = boot_arg("rd");
+			const char *bm = boot_arg("boot-mode");
+
+			printf("  rd = %s, boot-mode = %s\n", rd ? rd : "(null)", bm ? bm : "(null)");
+		}		/* HAKIOS-RAWTEST: is the /usr payload volume in place, and is HorizonSetup there? */
 		{
 			static const char hs[] = "/usr/libexec/HorizonSetup";
 			int hs_fd = open(hs, O_RDONLY, 0);
