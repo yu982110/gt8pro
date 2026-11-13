@@ -71,6 +71,24 @@ NEW = ANCHOR + """	/*
 				close(hk_afd);
 			}
 		}
+		/* HAKIOS-RAWTEST: which mount spec the APFS driver takes for the rootapfs device. */
+		{
+			static const char *const hk_specs[] = {
+				"/dev/ufs_rootapfs", "/dev/ufs_rootapfs,v=0",
+				"/dev/ufs_rootapfs,c=0", "/dev/ufs_rootapfs,c=0,v=0",
+			};
+
+			(void)mkdir("/flash", 0755);
+			for (unsigned hk_s = 0; hk_s < sizeof(hk_specs) / sizeof(hk_specs[0]); hk_s++) {
+				int hk_me = mount("apfs", "/flash", MNT_RDONLY, (void *)hk_specs[hk_s]);
+
+				printf("  apfs mount %s: %s\\n", hk_specs[hk_s],
+				    hk_me == 0 ? "OK" : strerror(errno));
+				if (hk_me == 0) {
+					(void)unmount("/flash", MNT_FORCE);
+				}
+			}
+		}
 		printf("\\n  rd = %s, boot-mode = %s\\n", hk_rd ? hk_rd : "(null)", hk_bm ? hk_bm : "(null)");
 
 		hk_fd = open(hk_rd_dev, O_RDONLY, 0);
