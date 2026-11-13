@@ -47,6 +47,7 @@ def main(root):
 \t(void)mount("ramfs", "/private", 0, NULL);
 \t(void)mkdir("/private/flash", 0755);
 \t(void)mkdir("/private/preboot", 0755);
+\t(void)mkdir("/private/var", 0755);
 '''
     body = body[len(START):].replace("/flash", "/private/flash")
     text = text[:i] + head + body + text[j:]
