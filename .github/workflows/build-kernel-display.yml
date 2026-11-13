@@ -152,8 +152,18 @@ jobs:
         run: python3 ci/patch-kernel-ufsrw-bounds.py hakios/xnu-src/xnu-8796.121.2
 
       - name: remove the GPU sources from the build before the display patch
-        if: false  # disabled for the red-screen test
-        run: echo 'step disabled for the red-screen test'
+        continue-on-error: true
+        run: |
+          root=hakios/xnu-src/xnu-8796.121.2
+          echo '=== before ==='
+          grep -n -i 'hakios.gpu.cpp\|hakios.adreno\|hakios_gpu' "$root/iokit/conf/files" 2>/dev/null | head -10 || echo 'none'
+          echo '=== zero the MiniIOSurface counters the live-log probe uses ==='
+          sed -i 's/^\([[:space:]]*\)MiniIOSurfaceUsage(&surfaces, &surface_bytes);/\1surfaces = 0; surface_bytes = 0;/' "$root/osfmk/arm64/loader_return.c" 2>/dev/null || true
+          echo '=== now deleting GPU sources from the file list ==='
+          sed -i '/hakios.gpu.cpp\|hakios.adreno\|hakios_gpu/d' "$root/iokit/conf/files" 2>/dev/null || true
+          sed -i '/hakios_adreno/s/^/# /' "$root/config/MASTER.hakios" 2>/dev/null || true
+          echo '=== after ==='
+          grep -n -i 'hakios.gpu.cpp\|hakios.adreno' "$root/iokit/conf/files" 2>/dev/null | head -5 || echo 'gone'
 
       - name: patch kernel display (experiment)
         continue-on-error: true
