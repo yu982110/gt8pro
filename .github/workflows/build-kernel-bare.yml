@@ -185,10 +185,10 @@ jobs:
         run: |
           f=hakios/xnu-src/xnu-8796.121.2/config/MASTER.hakios
           echo '=== before ==='
-          grep -n 'CONFIG_HAKIOS_ADRENO' "$f" 2>/dev/null || echo 'no config file'
-          sed -i 's/^CONFIG_HAKIOS_ADRENO=y/# CONFIG_HAKIOS_ADRENO is not set/' "$f" 2>/dev/null || true
+          grep -in 'hakios_adreno' "$f" 2>/dev/null || echo 'no config file'
+          sed -i '/hakios_adreno/s/^/# /' "$f" 2>/dev/null || true
           echo '=== after ==='
-          grep -n 'CONFIG_HAKIOS_ADRENO' "$f" 2>/dev/null || echo 'still no config file'
+          grep -in 'hakios_adreno' "$f" 2>/dev/null || echo 'no hakios_adreno line'
 
       - name: patch kernel display (Sweet IOSurface + IOMobileFramebuffer)
         continue-on-error: true
