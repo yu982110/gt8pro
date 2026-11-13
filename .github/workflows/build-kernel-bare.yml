@@ -182,12 +182,15 @@ jobs:
 
       - name: remove the GPU sources from the build before the display patch
         if: false  # disabled for the red-screen test
+        run: echo 'step disabled for the red-screen test'
 
       - name: patch kernel display (Sweet IOSurface + IOMobileFramebuffer)
         if: false  # disabled for the red-screen test
+        run: echo 'step disabled for the red-screen test'
 
       - name: patch kernel DPU scanout
         if: false  # disabled for the red-screen test
+        run: echo 'step disabled for the red-screen test'
 
       - name: build kernel
         run: |
