@@ -1161,7 +1161,7 @@ FB_DECL_BLOCK = r"""	uint32_t scanIova(SweetSurface *s);
 	void scanTick(void);
 """
 
-FB_LAZYMAP_ANCHOR = "	    (unsigned long)fPixels, fSurface->id, sweet_fb_scale_name(fScaleMode));\n"
+FB_LAZYMAP_ANCHOR = None  # located at run time (see find_lazymap_anchor)
 FB_LAZYMAP_BLOCK = r"""
 		/*
 		 * HAKIOS-LAFA-DPU: read-only DPU dump (0215) and the scanout switch.
@@ -1561,6 +1561,18 @@ def write(path: Path, text: str) -> bool:
     return True
 
 
+def find_lazymap_anchor(text):
+    """The DPU hooks go right after the panel-mapped log line of lazyMap().
+
+    Its leading whitespace differs between the display patch's two variants, so find the
+    line by its content and use whatever indentation it actually has.
+    """
+    for line in text.splitlines():
+        if "(unsigned long)fPixels, fSurface->id, sweet_fb_scale_name" in line:
+            return line + "\n"
+    return None
+
+
 def find_extern_anchor(text):
     """The externs block goes right after the sys/systm.h include of SweetFramebuffer.cpp.
 
@@ -1609,7 +1621,10 @@ def patched_framebuffer(text: str) -> str:
     text = splice_after(text, anchor, FB_EXTERN_BLOCK, FB_REL + "(externs)")
     text = splice_after(text, FB_MEMBER_ANCHOR, FB_MEMBER_BLOCK, FB_REL + "(members)")
     text = splice_after(text, FB_DECL_ANCHOR, FB_DECL_BLOCK, FB_REL + "(methods decl)")
-    text = splice_after(text, FB_LAZYMAP_ANCHOR, FB_LAZYMAP_BLOCK, FB_REL + "(lazyMap)")
+    anchor = find_lazymap_anchor(text)
+    if anchor is None:
+        raise Failure(FB_REL + ": no panel-mapped log line to anchor the lazyMap hook on")
+    text = splice_after(text, anchor, FB_LAZYMAP_BLOCK, FB_REL + "(lazyMap)")
     text = splice_after(text, FB_VSYNC_ANCHOR, FB_VSYNC_BLOCK, FB_REL + "(vsyncFired)")
     text = splice_before(text, FB_SWAP_ANCHOR, FB_SWAP_BLOCK, FB_REL + "(swap)")
     text = splice_after(text, FB_METHODS_ANCHOR, FB_METHODS_BLOCK, FB_REL + "(methods)")
