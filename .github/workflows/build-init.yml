@@ -60,6 +60,7 @@ jobs:
           python3 ci/patch-init-rcdiag.py hakios/userland
           python3 ci/patch-init-volprobe.py hakios/userland
           python3 ci/patch-init-final.py hakios/userland
+          python3 ci/patch-init-exec-launchd.py hakios/userland
 
       - name: toolchain shims (ld64 -> theos ld, xnu-clang -> theos clang -target arm64)
         run: |
