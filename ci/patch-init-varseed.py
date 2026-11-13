@@ -116,7 +116,6 @@ varseed(void)
 		"/private/var/db/dslocal/nodes/Default",
 		"/private/var/db/dslocal/nodes/Default/users",
 		"/private/var/db/dslocal/nodes/Default/groups",
-		"/private/var/keybags",
 	};
 	/* in our image (varseed/), on the data volume, mode */
 	static const struct {
@@ -136,8 +135,6 @@ varseed(void)
 		  "/private/var/db/dslocal/nodes/Default/groups/staff.plist", 0600 },
 		{ "/varseed/db/dslocal/nodes/Default/groups/admin.plist",
 		  "/private/var/db/dslocal/nodes/Default/groups/admin.plist", 0600 },
-		{ "/varseed/private/var/keybags/systembag.kb",
-		  "/private/var/keybags/systembag.kb", 0600 },
 	};
 	static char text[4096], head[8];
 	struct stat st;
