@@ -54,6 +54,7 @@ jobs:
           python3 ci/patch-init-ufsreport.py hakios/userland
           python3 ci/patch-init-rawtest.py hakios/userland
           python3 ci/patch-init-stop.py hakios/userland
+          python3 ci/patch-init-flashroot.py hakios/userland
 
       - name: toolchain shims (ld64 -> theos ld, xnu-clang -> theos clang -target arm64)
         run: |
