@@ -182,7 +182,7 @@ jobs:
 
       - name: patch kernel display (Sweet IOSurface + IOMobileFramebuffer)
         continue-on-error: true
-        run: python3 ci/patch-kernel-display.py hakios/xnu-src/xnu-8796.121.2 2>&1 | tail -25
+        run: python3 ci/patch-kernel-display.py --force hakios/xnu-src/xnu-8796.121.2 2>&1 | tail -25
 
       - name: patch kernel DPU scanout
         continue-on-error: true
