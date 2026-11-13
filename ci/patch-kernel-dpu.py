@@ -1403,7 +1403,7 @@ AppleCLCD::scanTick(void)
 
 """
 
-FB_FREE_ANCHOR = """	if (fScaleScratch != NULL) {
+FB_FREE_ANCHOR = None  # located at run time (see find_free_anchor)
 		IOFree(fScaleScratch, SWEET_FB_SCALE_SCRATCH_BYTES);
 		fScaleScratch = NULL;
 	}
@@ -1561,6 +1561,14 @@ def write(path: Path, text: str) -> bool:
     return True
 
 
+def find_free_anchor(text):
+    """The free() hook goes at the start of the fScaleScratch teardown block."""
+    for line in text.splitlines():
+        if "fScaleScratch != NULL" in line:
+            return line + "\n"
+    return None
+
+
 def find_methods_anchor(text):
     """The methods block goes right before the composer of SweetFramebuffer.
 
@@ -1658,7 +1666,10 @@ def patched_framebuffer(text: str) -> str:
     if anchor is None:
         raise Failure(FB_REL + ": no composer comment to anchor the methods on")
     text = splice_after(text, anchor, FB_METHODS_BLOCK, FB_REL + "(methods)")
-    text = splice_after(text, FB_FREE_ANCHOR, FB_FREE_BLOCK, FB_REL + "(free)")
+    anchor = find_free_anchor(text)
+    if anchor is None:
+        raise Failure(FB_REL + ": no fScaleScratch teardown to anchor the free hook on")
+    text = splice_after(text, anchor, FB_FREE_BLOCK, FB_REL + "(free)")
     return text
 
 
