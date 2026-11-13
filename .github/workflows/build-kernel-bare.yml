@@ -176,6 +176,10 @@ jobs:
       - name: patch kernel skip debug-only inits
         run: python3 ci/patch-kernel-skip-debug-init.py hakios/xnu-src/xnu-8796.121.2
 
+      - name: patch kernel keystore (AppleKeyStore registration)
+        continue-on-error: true
+        run: python3 ci/patch-kernel-keystore.py hakios/xnu-src/xnu-8796.121.2 2>&1 | tail -25
+
       - name: build kernel
         run: |
           cd hakios
