@@ -85,7 +85,7 @@ NEW = ANCHOR + """	/*
 				printf("  apfs mount %s: %s\\n", hk_specs[hk_s],
 				    hk_me == 0 ? "OK" : strerror(errno));
 				if (hk_me == 0) {
-					(void)unmount("/flash", MNT_FORCE);
+					break;
 				}
 			}
 		}
