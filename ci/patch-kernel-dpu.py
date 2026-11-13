@@ -1096,6 +1096,8 @@ hakios_dpu_scanout_counts(uint64_t *shows, uint64_t *faults)
 # 2) iokit/Kernel/SweetFramebuffer.cpp -- call sites
 # ==========================================================================
 FB_EXTERN_ANCHOR = "#include <sys/systm.h>          /* bzero(), strncmp() */\n"
+# the display patch generates one of two variants of that include line; accept either.
+FB_EXTERN_ANCHOR_ALT = "#include <sys/systm.h>          /* bzero(), copyout() */\n"
 FB_EXTERN_BLOCK = r"""
 /*
  * HAKIOS-LAFA-DPU (port of data-a-live 0215 + 0217): the display controller's
@@ -1201,6 +1203,9 @@ FB_SWAP_BLOCK = r"""	/*
 	 */
 	if (mask != 0 && scanPresent(rec, mask)) {
 		return;
+	}
+	if (fScanOn) {
+		fScanCopies++;          /* scanout is on but this frame was not for the pipes */
 	}
 	scanPanel();
 
@@ -1586,7 +1591,8 @@ def splice_before(text: str, anchor: str, block: str, what: str) -> str:
 
 
 def patched_framebuffer(text: str) -> str:
-    text = splice_after(text, FB_EXTERN_ANCHOR, FB_EXTERN_BLOCK, FB_REL + "(externs)")
+    anchor = FB_EXTERN_ANCHOR if FB_EXTERN_ANCHOR in text else FB_EXTERN_ANCHOR_ALT
+    text = splice_after(text, anchor, FB_EXTERN_BLOCK, FB_REL + "(externs)")
     text = splice_after(text, FB_MEMBER_ANCHOR, FB_MEMBER_BLOCK, FB_REL + "(members)")
     text = splice_after(text, FB_DECL_ANCHOR, FB_DECL_BLOCK, FB_REL + "(methods decl)")
     text = splice_after(text, FB_LAZYMAP_ANCHOR, FB_LAZYMAP_BLOCK, FB_REL + "(lazyMap)")
