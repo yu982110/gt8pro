@@ -40,6 +40,19 @@ NEW = ANCHOR + """	/*
 		char hk_rec[96];
 		int hk_err = 0, hk_ios = -1, hk_len = 0, hk_fd;
 
+		/* HAKIOS-RAWTEST: which device nodes the kernel made, under which name. */
+		{
+			static const char *const hk_nodes[] = {
+				"/dev/ufs_rootapfs", "/dev/rufs_rootapfs", "/dev/ufs_dinfo",
+				"/dev/ufs_last_parti", "/dev/ufs_darwin", "/dev/ufs_darwin_data",
+			};
+			struct stat hk_st;
+
+			for (unsigned hk_i = 0; hk_i < sizeof(hk_nodes) / sizeof(hk_nodes[0]); hk_i++) {
+				printf("  node %s: %s\\n", hk_nodes[hk_i],
+				    stat(hk_nodes[hk_i], &hk_st) == 0 ? "there" : strerror(errno));
+			}
+		}
 		printf("\\n  rd = %s, boot-mode = %s\\n", hk_rd ? hk_rd : "(null)", hk_bm ? hk_bm : "(null)");
 
 		hk_fd = open(hk_rd_dev, O_RDONLY, 0);
