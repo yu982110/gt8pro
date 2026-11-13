@@ -1664,8 +1664,12 @@ def patched_framebuffer(text: str) -> str:
     text = splice_after(text, anchor, FB_METHODS_BLOCK, FB_REL + "(methods)")
     anchor = find_free_anchor(text)
     if anchor is None:
-        raise Failure(FB_REL + ": no fScaleScratch teardown to anchor the free hook on")
-    text = splice_after(text, anchor, FB_FREE_BLOCK, FB_REL + "(free)")
+        # The free() hook only restores the ABL's panel memory when the service goes away;
+        # it is not needed for scanning out, so a variant without that teardown simply
+        # skips it instead of failing the whole patch.
+        print("  ! " + FB_REL + "(free): no fScaleScratch teardown, skipping that hook")
+    else:
+        text = splice_after(text, anchor, FB_FREE_BLOCK, FB_REL + "(free)")
     return text
 
 
