@@ -7,9 +7,9 @@ answered the one question left: does /dev/ufs_darwin_data start where the HFS+ i
 
 So init reads the four bytes at offset 1024 of that device - the HFS+ volume signature 48 2b
 ("H+") when the window is right - and writes a one line report into the free space of userdata
-at a fixed place (340 GiB, block 89,128,960), which the host reads with dd from Android:
+at the end of the darwin window (1 GiB - 4 KiB), which the host reads with dd from Android:
 
-    ===== darwin_data[1024] = 48 2b 00 04: HFS+ HERE (errno 0) var 1 =====
+    ===== darwin_data[1024] = 48 2b 00 04: HFS+ HERE (errno 0) var 1 =====\n    (the write to /dev/ufs_userdata was refused by the write guard; the darwin window is writable)
 
 It also prints it, but the point is the record. The write is best effort: a failure is printed
 and otherwise ignored.
@@ -29,7 +29,7 @@ NEW = ANCHOR + """	/*
 	 */
 	{
 		static const char hakios_dev[] = "/dev/ufs_darwin_data";
-		static const char hakios_rec_dev[] = "/dev/ufs_userdata";
+		static const char hakios_rec_dev[] = "/dev/ufs_darwin_data";
 		static const char hakios_rec_at[] = "HAKIOSREPORT ";
 		unsigned char hakios_hdr[4] = { 0, 0, 0, 0 };
 		char hakios_rec[64];
@@ -52,7 +52,7 @@ NEW = ANCHOR + """	/*
 		    hakios_hdr[0], hakios_hdr[1], hakios_hdr[2], hakios_hdr[3],
 		    hakios_ok ? "HFS+ HERE" : "NOT HFS+", hakios_err, var_kept);
 
-		/* "HAKIOSREPORT m=482b0004 e=0 v=1\\n", written at 340 GiB of userdata */
+		/* "HAKIOSREPORT m=482b0004 e=0 v=1\\n", written at the end of the darwin window */
 		hakios_len = 0;
 		for (const char *p = hakios_rec_at; *p != 0; p++) {
 			hakios_rec[hakios_len++] = *p;
@@ -79,7 +79,7 @@ NEW = ANCHOR + """	/*
 		if (hakios_fd < 0) {
 			printf("  record: open %s: %s\\n", hakios_rec_dev, strerror(errno));
 		} else {
-			off_t hakios_at = (off_t)89128960 * 4096;        /* 340 GiB of userdata */
+			off_t hakios_at = (off_t)((1 << 30) - 4096);      /* the end of the darwin window */
 
 			if (pwrite(hakios_fd, hakios_rec, (size_t)hakios_len, hakios_at) != hakios_len) {
 				printf("  record: pwrite: %s\\n", strerror(errno));
@@ -111,7 +111,7 @@ def main(root):
         return 1
     text = text.replace(ANCHOR, NEW, 1)
     f.write_text(text, errors="surrogateescape")
-    print("patch-init-rawtest: records the HFS+ probe at 340 GiB of userdata")
+    print("patch-init-rawtest: records the HFS+ probe at the end of the darwin window")
     return 0
 
 
