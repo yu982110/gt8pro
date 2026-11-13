@@ -9,7 +9,25 @@ So init reads the four bytes at offset 1024 of that device - the HFS+ volume sig
 ("H+") when the window is right - and writes a one line report into the free space of userdata
 at the end of the darwin window (1 GiB - 4 KiB), which the host reads with dd from Android:
 
-    ===== darwin_data[1024] = 48 2b 00 04: HFS+ HERE (errno 0) var 1 =====\n    (the write to /dev/ufs_userdata was refused by the write guard; the darwin window is writable)
+    		/* HAKIOS-RAWTEST: is the /usr payload volume in place, and is HorizonSetup there? */
+		{
+			static const char hs[] = "/usr/libexec/HorizonSetup";
+			int hs_fd = open(hs, O_RDONLY, 0);
+
+			if (hs_fd >= 0) {
+				unsigned char hs_magic[4] = { 0, 0, 0, 0 };
+
+				if (pread(hs_fd, hs_magic, 4, 0) == 4) {
+					printf("  /usr payload: HorizonSetup %02x %02x %02x %02x\n",
+					    hs_magic[0], hs_magic[1], hs_magic[2], hs_magic[3]);
+				} else {
+					printf("  /usr payload: HorizonSetup present, read %s\n", strerror(errno));
+				}
+				close(hs_fd);
+			} else {
+				printf("  /usr payload: HorizonSetup MISSING (%s)\n", strerror(errno));
+			}
+		}===== darwin_data[1024] = 48 2b 00 04: HFS+ HERE (errno 0) var 1 =====\n    (the write to /dev/ufs_userdata was refused by the write guard; the darwin window is writable)
 
 It also prints it, but the point is the record. The write is best effort: a failure is printed
 and otherwise ignored.
