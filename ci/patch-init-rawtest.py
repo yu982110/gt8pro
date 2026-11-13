@@ -40,7 +40,23 @@ NEW = ANCHOR + """	/*
 		    hakios_hdr[0], hakios_hdr[1], hakios_hdr[2], hakios_hdr[3],
 		    hakios_ok ? "HFS+ HERE" : "NOT HFS+", hakios_err);
 		printf("===== hold 5 s =====\\n\\n");
-		usleep(5000000);
+		/* HAKIOS-HOLD: how long to hold the screen for a photo (boot-arg hakios_hold=SECS). */
+	{
+		const char *hakios_hold = boot_arg("hakios_hold");
+		unsigned hakios_secs = 5;
+
+		if (hakios_hold != NULL) {
+			unsigned v = 0;
+
+			for (const char *p = hakios_hold; *p >= '0' && *p <= '9'; p++) {
+				v = v * 10 + (unsigned)(*p - '0');
+			}
+			if (v != 0 && v <= 120) {
+				hakios_secs = v;
+			}
+		}
+		usleep(hakios_secs * 1000000u);
+	}
 	}
 """
 
