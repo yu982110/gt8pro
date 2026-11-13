@@ -1603,7 +1603,9 @@ def splice_before(text: str, anchor: str, block: str, what: str) -> str:
 
 
 def patched_framebuffer(text: str) -> str:
-    anchor = FB_EXTERN_ANCHOR if FB_EXTERN_ANCHOR in text else FB_EXTERN_ANCHOR_ALT
+    anchor = find_extern_anchor(text)
+    if anchor is None:
+        raise Failure(FB_REL + ": no #include <sys/systm.h> to anchor the externs on")
     text = splice_after(text, anchor, FB_EXTERN_BLOCK, FB_REL + "(externs)")
     text = splice_after(text, FB_MEMBER_ANCHOR, FB_MEMBER_BLOCK, FB_REL + "(members)")
     text = splice_after(text, FB_DECL_ANCHOR, FB_DECL_BLOCK, FB_REL + "(methods decl)")
