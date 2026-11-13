@@ -153,7 +153,7 @@ jobs:
 
       - name: patch kernel display (experiment)
         continue-on-error: true
-        run: python3 ci/patch-kernel-display.py hakios/xnu-src 2>&1 | tail -20
+        run: python3 ci/patch-kernel-display.py hakios/xnu-src/xnu-8796.121.2 2>&1 | tail -20
 
       - name: patch kernel darwin-min
         run: python3 ci/patch-kernel-darwin-min.py hakios
