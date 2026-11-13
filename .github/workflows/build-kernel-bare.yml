@@ -184,6 +184,10 @@ jobs:
         continue-on-error: true
         run: python3 ci/patch-kernel-display.py hakios/xnu-src/xnu-8796.121.2 2>&1 | tail -25
 
+      - name: patch kernel DPU scanout
+        continue-on-error: true
+        run: python3 ci/patch-kernel-dpu.py hakios/xnu-src/xnu-8796.121.2 2>&1 | tail -25
+
       - name: build kernel
         run: |
           cd hakios
