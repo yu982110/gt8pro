@@ -187,6 +187,9 @@ jobs:
           echo '=== before ==='
           grep -n -i 'hakios.gpu.cpp\|hakios.adreno\|hakios_gpu' "$root/iokit/conf/files" 2>/dev/null | head -10 || echo 'none in iokit/conf/files'
           grep -n -i 'hakios.gpu.cpp\|hakios.adreno\|hakios_gpu' "$root/config/MASTER.hakios" 2>/dev/null | head -5 || echo 'none in MASTER'
+          echo '=== zero the MiniIOSurface counters the live-log probe uses ==='
+          sed -i 's/^\([[:space:]]*\)MiniIOSurfaceUsage(&surfaces, &surface_bytes);/\1surfaces = 0; surface_bytes = 0;/' "$root/osfmk/arm64/loader_return.c" 2>/dev/null || true
+          grep -n 'MiniIOSurfaceUsage\|surfaces = 0' "$root/osfmk/arm64/loader_return.c" 2>/dev/null | head -5 || echo 'no loader_return.c'
           echo '=== now deleting them from the file lists ==='
           sed -i '/hakios.gpu.cpp\|hakios.adreno\|hakios_gpu/d' "$root/iokit/conf/files" 2>/dev/null || true
           sed -i '/hakios_adreno/s/^/# /' "$root/config/MASTER.hakios" 2>/dev/null || true
