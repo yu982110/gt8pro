@@ -1586,13 +1586,25 @@ def find_extern_anchor(text):
 
 
 def splice_after(text: str, anchor: str, block: str, what: str) -> str:
-    count = text.count(anchor)
-    if count == 0:
-        raise Failure("%s 里找不到锚点 %r（树不是 apply.sh + patch-kernel-display.py 之后的样子？）"
-                      % (what, anchor[:60]))
-    if count > 1:
-        raise Failure("%s 里锚点 %r 出现 %d 次，不唯一" % (what, anchor[:60], count))
-    return text.replace(anchor, anchor + block, 1)
+    """Insert `block` right after the line that matches `anchor`.
+
+    The anchors in this file were written against one variant of the display patch's
+    SweetFramebuffer.cpp; the other variant indents the same lines differently.  So when the
+    exact text is not there, match the anchor's stripped form against the stripped lines and
+    splice after the line that actually exists (indent-insensitive).
+    """
+    if anchor in text:
+        idx = text.index(anchor) + len(anchor)
+    else:
+        want = anchor.strip()
+        idx = None
+        for line in text.splitlines(True):
+            if line.strip() == want:
+                idx = text.index(line) + len(line)
+                break
+        if idx is None:
+            raise Failure(what + ": anchor not found: " + anchor.strip()[:60])
+    return text[:idx] + block + text[idx:]
 
 
 def replace_once(text: str, old: str, new: str, what: str) -> str:
