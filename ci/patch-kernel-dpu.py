@@ -1568,7 +1568,11 @@ def find_lazymap_anchor(text):
     line by its content and use whatever indentation it actually has.
     """
     for line in text.splitlines():
-        if "(unsigned long)fPixels, fSurface->id, sweet_fb_scale_name" in line:
+        # the log line differs between the display patch's variants; any of these is it
+        if "fPixels" in line and "fSurface" in line and "sweet_fb_scale_name" in line:
+            return line + "\n"
+    for line in text.splitlines():
+        if "fPixels" in line and "fSurface" in line:
             return line + "\n"
     return None
 
