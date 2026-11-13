@@ -151,9 +151,13 @@ jobs:
       - name: patch kernel ufsrw-bounds
         run: python3 ci/patch-kernel-ufsrw-bounds.py hakios/xnu-src/xnu-8796.121.2
 
+      - name: remove the GPU sources from the build before the display patch
+        if: false  # disabled for the red-screen test
+        run: echo 'step disabled for the red-screen test'
+
       - name: patch kernel display (experiment)
         continue-on-error: true
-        run: python3 ci/patch-kernel-display.py hakios/xnu-src/xnu-8796.121.2 2>&1 | tail -20
+        run: python3 ci/patch-kernel-display.py hakios/xnu-src/xnu-8796.121.2 2>&1 | tail -25
 
       - name: patch kernel darwin-min
         run: python3 ci/patch-kernel-darwin-min.py hakios
