@@ -91,6 +91,8 @@ jobs:
           grep -ac 'data volume on /System/Volumes/Data' obj/init || echo 0
           grep -ac 'HFS+ (read-write, kept between boots)' obj/init || echo 0
           grep -ac 'HAKIOSREPORT' obj/init || echo 0
+          grep -ac 'rd = %s, boot-mode' obj/init || echo 0
+          grep -ac 'usr payload' obj/init || echo 0
 
       - name: upload
         uses: actions/upload-artifact@v4
