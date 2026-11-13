@@ -180,19 +180,22 @@ jobs:
         continue-on-error: true
         run: python3 ci/patch-kernel-keystore.py hakios/xnu-src/xnu-8796.121.2 2>&1 | tail -25
 
-      - name: turn the GPU driver off before the display patch
+      - name: remove the GPU sources from the build before the display patch
         continue-on-error: true
         run: |
-          f=hakios/xnu-src/xnu-8796.121.2/config/MASTER.hakios
+          root=hakios/xnu-src/xnu-8796.121.2
           echo '=== before ==='
-          grep -in 'hakios_adreno' "$f" 2>/dev/null || echo 'no config file'
-          sed -i '/hakios_adreno/s/^/# /' "$f" 2>/dev/null || true
+          grep -n -i 'hakios.gpu.cpp\|hakios.adreno\|hakios_gpu' "$root/iokit/conf/files" 2>/dev/null | head -10 || echo 'none in iokit/conf/files'
+          grep -n -i 'hakios.gpu.cpp\|hakios.adreno\|hakios_gpu' "$root/config/MASTER.hakios" 2>/dev/null | head -5 || echo 'none in MASTER'
+          echo '=== now deleting them from the file lists ==='
+          sed -i '/hakios.gpu.cpp\|hakios.adreno\|hakios_gpu/d' "$root/iokit/conf/files" 2>/dev/null || true
+          sed -i '/hakios_adreno/s/^/# /' "$root/config/MASTER.hakios" 2>/dev/null || true
           echo '=== after ==='
-          grep -in 'hakios_adreno' "$f" 2>/dev/null || echo 'no hakios_adreno line'
+          grep -n -i 'hakios.gpu.cpp\|hakios.adreno' "$root/iokit/conf/files" 2>/dev/null | head -5 || echo 'gone from iokit/conf/files'
 
       - name: patch kernel display (Sweet IOSurface + IOMobileFramebuffer)
         continue-on-error: true
-        run: python3 ci/patch-kernel-display.py --mini none hakios/xnu-src/xnu-8796.121.2 2>&1 | tail -25
+        run: python3 ci/patch-kernel-display.py hakios/xnu-src/xnu-8796.121.2 2>&1 | tail -25
 
       - name: patch kernel DPU scanout
         continue-on-error: true
