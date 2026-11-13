@@ -3,7 +3,8 @@
 
 The switch root leaves the Darwin root mounted (its /sbin/launchd.darwin is there, 525088 bytes),
 but /redwood/etc/rc is not where init looks for the hand-over, so init ran its tests and halted.
-With root_apfs set, exec /sbin/launchd.darwin straight away instead.
+With root_apfs set, exec /sbin/launchd.darwin once the data volume is mounted, instead of
+running the tests and the rc file this layout does not provide where they look.
 
     python3 ci/patch-init-exec-launchd.py <userland dir>
 """
@@ -31,9 +32,9 @@ def main(root):
         print("patch-init-exec-launchd: already applied")
         return 0
     # find the flash_root call and add the hand-over after it
-    marker = "\t\t\tflash_root(dev);\n"
+    marker = "\tmount_writable();\n"
     if text.count(marker) != 1:
-        print("patch-init-exec-launchd: MISS: the flash_root call appears %d times" % text.count(marker))
+        print("patch-init-exec-launchd: MISS: the mount_writable call appears %d times" % text.count(marker))
         return 1
     add = marker + '''\t\t\t/*
 \t\t\t * HAKIOS-EXEC-LAUNCHD: the switch root has happened; the Darwin root's own launchd is
@@ -50,7 +51,7 @@ def main(root):
 '''
     text = text.replace(marker, add, 1)
     f.write_text(text, errors="surrogateescape")
-    print("patch-init-exec-launchd: hands over right after flash_root")
+    print("patch-init-exec-launchd: hands over after mount_writable (the data volume is mounted)")
     return 0
 
 
