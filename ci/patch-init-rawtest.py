@@ -53,6 +53,24 @@ NEW = ANCHOR + """	/*
 				    stat(hk_nodes[hk_i], &hk_st) == 0 ? "there" : strerror(errno));
 			}
 		}
+		/* HAKIOS-RAWTEST: is the rootapfs device readable, and does it begin with an APFS container? */
+		{
+			int hk_afd = open("/dev/ufs_rootapfs", O_RDONLY, 0);
+
+			if (hk_afd < 0) {
+				printf("  rootapfs open: %s\\n", strerror(errno));
+			} else {
+				unsigned char hk_ab[4] = { 0, 0, 0, 0 };
+
+				if (pread(hk_afd, hk_ab, 4, 32) != 4) {
+					printf("  rootapfs read: %s\\n", strerror(errno));
+				} else {
+					printf("  rootapfs[32] = %02x %02x %02x %02x (APFS NXSB = 4e 58 53 42)\\n",
+					    hk_ab[0], hk_ab[1], hk_ab[2], hk_ab[3]);
+				}
+				close(hk_afd);
+			}
+		}
 		printf("\\n  rd = %s, boot-mode = %s\\n", hk_rd ? hk_rd : "(null)", hk_bm ? hk_bm : "(null)");
 
 		hk_fd = open(hk_rd_dev, O_RDONLY, 0);
