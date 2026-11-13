@@ -180,9 +180,19 @@ jobs:
         continue-on-error: true
         run: python3 ci/patch-kernel-keystore.py hakios/xnu-src/xnu-8796.121.2 2>&1 | tail -25
 
+      - name: turn the GPU driver off before the display patch
+        continue-on-error: true
+        run: |
+          f=hakios/xnu-src/xnu-8796.121.2/config/MASTER.hakios
+          echo '=== before ==='
+          grep -n 'CONFIG_HAKIOS_ADRENO' "$f" 2>/dev/null || echo 'no config file'
+          sed -i 's/^CONFIG_HAKIOS_ADRENO=y/# CONFIG_HAKIOS_ADRENO is not set/' "$f" 2>/dev/null || true
+          echo '=== after ==='
+          grep -n 'CONFIG_HAKIOS_ADRENO' "$f" 2>/dev/null || echo 'still no config file'
+
       - name: patch kernel display (Sweet IOSurface + IOMobileFramebuffer)
         continue-on-error: true
-        run: python3 ci/patch-kernel-display.py --force hakios/xnu-src/xnu-8796.121.2 2>&1 | tail -25
+        run: python3 ci/patch-kernel-display.py hakios/xnu-src/xnu-8796.121.2 2>&1 | tail -25
 
       - name: patch kernel DPU scanout
         continue-on-error: true
