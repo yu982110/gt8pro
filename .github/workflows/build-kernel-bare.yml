@@ -181,37 +181,13 @@ jobs:
         run: python3 ci/patch-kernel-keystore.py hakios/xnu-src/xnu-8796.121.2 2>&1 | tail -25
 
       - name: remove the GPU sources from the build before the display patch
-        continue-on-error: true
-        run: |
-          root=hakios/xnu-src/xnu-8796.121.2
-          echo '=== before ==='
-          grep -n -i 'hakios.gpu.cpp\|hakios.adreno\|hakios_gpu' "$root/iokit/conf/files" 2>/dev/null | head -10 || echo 'none in iokit/conf/files'
-          grep -n -i 'hakios.gpu.cpp\|hakios.adreno\|hakios_gpu' "$root/config/MASTER.hakios" 2>/dev/null | head -5 || echo 'none in MASTER'
-          echo '=== zero the MiniIOSurface counters the live-log probe uses ==='
-          sed -i 's/^\([[:space:]]*\)MiniIOSurfaceUsage(&surfaces, &surface_bytes);/\1surfaces = 0; surface_bytes = 0;/' "$root/osfmk/arm64/loader_return.c" 2>/dev/null || true
-          grep -n 'MiniIOSurfaceUsage\|surfaces = 0' "$root/osfmk/arm64/loader_return.c" 2>/dev/null | head -5 || echo 'no loader_return.c'
-          echo '=== now deleting them from the file lists ==='
-          sed -i '/hakios.gpu.cpp\|hakios.adreno\|hakios_gpu/d' "$root/iokit/conf/files" 2>/dev/null || true
-          sed -i '/hakios_adreno/s/^/# /' "$root/config/MASTER.hakios" 2>/dev/null || true
-          echo '=== after ==='
-          grep -n -i 'hakios.gpu.cpp\|hakios.adreno' "$root/iokit/conf/files" 2>/dev/null | head -5 || echo 'gone from iokit/conf/files'
+        if: false  # disabled for the red-screen test
 
       - name: patch kernel display (Sweet IOSurface + IOMobileFramebuffer)
-        continue-on-error: true
-        run: python3 ci/patch-kernel-display.py --mini none hakios/xnu-src/xnu-8796.121.2 2>&1 | tail -25
+        if: false  # disabled for the red-screen test
 
       - name: patch kernel DPU scanout
-        continue-on-error: true
-        run: |
-          echo '=== DPU patch ==='
-          set +e
-          python3 ci/patch-kernel-dpu.py hakios/xnu-src/xnu-8796.121.2 2>&1 | tail -40
-          echo "DPU patch exit: $?"
-          echo '=== DPU check ==='
-          python3 ci/patch-kernel-dpu.py --check hakios/xnu-src/xnu-8796.121.2 2>&1 | tail -10
-          echo "check exit: $?"
-          ls -l hakios/xnu-src/xnu-8796.121.2/bsd/dev/hakios_dpu.c 2>&1 || echo 'no hakios_dpu.c'
-          grep -c 'HAKIOS-LAFA-DPU' hakios/xnu-src/xnu-8796.121.2/bsd/conf/files 2>&1 || echo 'not in conf/files'
+        if: false  # disabled for the red-screen test
 
       - name: build kernel
         run: |
