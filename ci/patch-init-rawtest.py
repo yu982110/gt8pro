@@ -1,42 +1,19 @@
 #!/usr/bin/env python3
-"""patch-init-rawtest.py -- record the HFS+ probe result on the storage, for the host to read.
+"""patch-init-rawtest.py -- report the data volume and /usr state where the host can read it.
 
-The screen is unreliable (the loader's snapshots, scrolling, the phone rebooting) and the
-kernel's own console does not always reach the persisted log, so neither photos nor logs have
-answered the one question left: does /dev/ufs_darwin_data start where the HFS+ image was written?
+The screen is unreliable (the loader's snapshots, scrolling, the phone rebooting) and the kernel
+console does not always reach the persisted log, so init reports what only it can see into places
+the host can read without a camera:
 
-So init reads the four bytes at offset 1024 of that device - the HFS+ volume signature 48 2b
-("H+") when the window is right - and writes a one line report into the free space of userdata
-at the end of the darwin window (1 GiB - 4 KiB), which the host reads with dd from Android:
-
-    		/* HAKIOS-RAWTEST: what launchd reads to decide whether this is a RAM disk. */
-		{
-			const char *rd = boot_arg("rd");
-			const char *bm = boot_arg("boot-mode");
-
-			printf("  rd = %s, boot-mode = %s\n", rd ? rd : "(null)", bm ? bm : "(null)");
-		}		/* HAKIOS-RAWTEST: is the /usr payload volume in place, and is HorizonSetup there? */
-		{
-			static const char hs[] = "/usr/libexec/HorizonSetup";
-			int hs_fd = open(hs, O_RDONLY, 0);
-
-			if (hs_fd >= 0) {
-				unsigned char hs_magic[4] = { 0, 0, 0, 0 };
-
-				if (pread(hs_fd, hs_magic, 4, 0) == 4) {
-					printf("  /usr payload: HorizonSetup %02x %02x %02x %02x\n",
-					    hs_magic[0], hs_magic[1], hs_magic[2], hs_magic[3]);
-				} else {
-					printf("  /usr payload: HorizonSetup present, read %s\n", strerror(errno));
-				}
-				close(hs_fd);
-			} else {
-				printf("  /usr payload: HorizonSetup MISSING (%s)\n", strerror(errno));
-			}
-		}===== darwin_data[1024] = 48 2b 00 04: HFS+ HERE (errno 0) var 1 =====\n    (the write to /dev/ufs_userdata was refused by the write guard; the darwin window is writable)
-
-It also prints it, but the point is the record. The write is best effort: a failure is printed
-and otherwise ignored.
+  - reads the four bytes at offset 1024 of /dev/ufs_darwin_data: the HFS+ volume signature is
+    48 2b ("H+") when the window starts where the image was written;
+  - reads the first four bytes of /usr/libexec/HorizonSetup: whether the /usr payload volume is
+    in place, which is what launchd's restore-datapartition boot task execs;
+  - prints the boot arguments launchd reads to decide whether this is a RAM disk (rd) and the
+    boot mode, and the /private/var result;
+  - writes one line with all of it into /dev/klog (when this Darwin has one) and to the end of
+    the darwin window, which the host reads with dd;
+  - hakios_stop=1 freezes the machine here, so the screen can be photographed at rest.
 
     python3 ci/patch-init-rawtest.py <userland dir>
 """
@@ -48,91 +25,103 @@ MARK = "HAKIOS-RAWTEST"
 ANCHOR = '\tread_whole(in_image("/etc/var.skel"), skeleton, sizeof(skeleton));\n'
 
 NEW = ANCHOR + """	/*
-	 * HAKIOS-RAWTEST: read the HFS+ signature through /dev/ufs_darwin_data (offset 1024), and
-	 * record it in userdata at 340 GiB so the host can read it with dd - no camera needed.
+	 * HAKIOS-RAWTEST: what launchd reads to decide whether this is a RAM disk, and what the
+	 * restore-datapartition boot task needs.
 	 */
 	{
-		static const char hakios_dev[] = "/dev/ufs_darwin_data";
-		static const char hakios_rec_dev[] = "/dev/ufs_darwin_data";
-		static const char hakios_rec_at[] = "HAKIOSREPORT ";
-		unsigned char hakios_hdr[4] = { 0, 0, 0, 0 };
-		char hakios_rec[64];
-		int hakios_fd = open(hakios_dev, O_RDONLY, 0);
-		int hakios_err = 0;
-		int hakios_ok = 0;
-		int hakios_len;
+		static const char hk_hs[] = "/usr/libexec/HorizonSetup";
+		static const char hk_rd_dev[] = "/dev/ufs_darwin_data";
+		static const char hk_rec_dev[] = "/dev/ufs_darwin_data";
+		static const char hk_rec_at[] = "HAKIOSREPORT ";
+		const char *hk_rd = boot_arg("rd");
+		const char *hk_bm = boot_arg("boot-mode");
+		unsigned char hk_hdr[4] = { 0, 0, 0, 0 };
+		unsigned char hk_ism[4] = { 0, 0, 0, 0 };
+		char hk_rec[96];
+		int hk_err = 0, hk_ios = -1, hk_len = 0, hk_fd;
 
-		if (hakios_fd < 0) {
-			hakios_err = errno;
+		printf("\\n  rd = %s, boot-mode = %s\\n", hk_rd ? hk_rd : "(null)", hk_bm ? hk_bm : "(null)");
+
+		hk_fd = open(hk_rd_dev, O_RDONLY, 0);
+		if (hk_fd < 0) {
+			hk_err = errno;
 		} else {
-			if (pread(hakios_fd, hakios_hdr, 4, 1024) != 4) {
-				hakios_err = errno;
+			if (pread(hk_fd, hk_hdr, 4, 1024) != 4) {
+				hk_err = errno;
+			}
+			close(hk_fd);
+		}
+		hk_fd = open(hk_hs, O_RDONLY, 0);
+		if (hk_fd < 0) {
+			printf("  /usr payload: HorizonSetup MISSING (%s)\\n", strerror(errno));
+		} else {
+			if (pread(hk_fd, hk_ism, 4, 0) == 4) {
+				hk_ios = 1;
+				printf("  /usr payload: HorizonSetup %02x %02x %02x %02x\\n",
+				    hk_ism[0], hk_ism[1], hk_ism[2], hk_ism[3]);
 			} else {
-				hakios_ok = (hakios_hdr[0] == 0x48 && hakios_hdr[1] == 0x2b);
+				printf("  /usr payload: HorizonSetup unreadable (%s)\\n", strerror(errno));
 			}
-			close(hakios_fd);
+			close(hk_fd);
 		}
-		printf("\\n\\n===== darwin_data[1024] = %02x %02x %02x %02x: %s (errno %d) var %d =====\\n",
-		    hakios_hdr[0], hakios_hdr[1], hakios_hdr[2], hakios_hdr[3],
-		    hakios_ok ? "HFS+ HERE" : "NOT HFS+", hakios_err, var_kept);
+		printf("===== darwin_data[1024] = %02x %02x %02x %02x (errno %d), var %d =====\\n",
+		    hk_hdr[0], hk_hdr[1], hk_hdr[2], hk_hdr[3], hk_err, var_kept);
 
-		/* "HAKIOSREPORT m=482b0004 e=0 v=1\\n", written at the end of the darwin window */
-		hakios_len = 0;
-		for (const char *p = hakios_rec_at; *p != 0; p++) {
-			hakios_rec[hakios_len++] = *p;
+		/* "HAKIOSREPORT m=482b0004 r=md0 b=- u=1 v=1\\n" */
+		for (const char *p = hk_rec_at; *p != 0; p++) {
+			hk_rec[hk_len++] = *p;
 		}
-		hakios_rec[hakios_len++] = 'm';
-		hakios_rec[hakios_len++] = '=';
-		for (int i = 0; i < 4; i++) {
-			static const char hex[] = "0123456789abcdef";
-
-			hakios_rec[hakios_len++] = hex[hakios_hdr[i] >> 4];
-			hakios_rec[hakios_len++] = hex[hakios_hdr[i] & 0xf];
+		for (const char *p = hk_rec_at; *p != 0; p++) {
+			hk_rec[hk_len++] = *p;
 		}
-		hakios_rec[hakios_len++] = ' ';
-		hakios_rec[hakios_len++] = 'e';
-		hakios_rec[hakios_len++] = '=';
-		hakios_rec[hakios_len++] = (char)('0' + (hakios_err % 10));
-		hakios_rec[hakios_len++] = ' ';
-		hakios_rec[hakios_len++] = 'v';
-		hakios_rec[hakios_len++] = '=';
-		hakios_rec[hakios_len++] = (char)('0' + (var_kept ? 1 : 0));
-		hakios_rec[hakios_len++] = '\\n';
 
-		/* HAKIOS-RAWTEST: also tell the kernel log, if this Darwin has one, so the record
-		 * reaches the loader's persisted log with no screen and no raw device write. */
 		{
-			int hakios_kfd = open("/dev/klog", O_WRONLY, 0);
+			static const char hx[] = "0123456789abcdef";
 
-			if (hakios_kfd >= 0) {
-				(void)write(hakios_kfd, hakios_rec, (size_t)hakios_len);
-				close(hakios_kfd);
+			hk_rec[hk_len++] = 'm';
+			hk_rec[hk_len++] = '=';
+			for (int i = 0; i < 4; i++) {
+				hk_rec[hk_len++] = hx[hk_hdr[i] >> 4];
+				hk_rec[hk_len++] = hx[hk_hdr[i] & 0xf];
 			}
+			hk_rec[hk_len++] = ' ';
+			hk_rec[hk_len++] = 'r';
+			hk_rec[hk_len++] = '=';
+			for (const char *p = hk_rd; p != NULL && *p != 0 && hk_len < 60; p++) {
+				hk_rec[hk_len++] = *p;
+			}
+			hk_rec[hk_len++] = ' ';
+			hk_rec[hk_len++] = 'u';
+			hk_rec[hk_len++] = '=';
+			hk_rec[hk_len++] = (char)('0' + (hk_ios == 1 ? 1 : 0));
+			hk_rec[hk_len++] = ' ';
+			hk_rec[hk_len++] = 'v';
+			hk_rec[hk_len++] = '=';
+			hk_rec[hk_len++] = (char)('0' + (var_kept ? 1 : 0));
+			hk_rec[hk_len++] = '\\n';
+		}
+		hk_fd = open("/dev/klog", O_WRONLY, 0);
+		if (hk_fd >= 0) {
+			(void)write(hk_fd, hk_rec, (size_t)hk_len);
+			close(hk_fd);
+		}
+		hk_fd = open(hk_rec_dev, O_WRONLY, 0);
+		if (hk_fd >= 0) {
+			if (pwrite(hk_fd, hk_rec, (size_t)hk_len, (off_t)((1 << 30) - 4096)) != hk_len) {
+				printf("  record: %s\\n", strerror(errno));
+			}
+			close(hk_fd);
 		}
 		/* HAKIOS-STOP: hakios_stop=1 freezes here, so the screen can be photographed at rest. */
 		{
-			const char *hakios_stop = boot_arg("hakios_stop");
+			const char *hk_stop = boot_arg("hakios_stop");
 
-			if (hakios_stop != NULL && hakios_stop[0] == '1') {
+			if (hk_stop != NULL && hk_stop[0] == '1') {
 				for (;;) {
 					usleep(1000000);
 				}
 			}
 		}
-		hakios_fd = open(hakios_rec_dev, O_WRONLY, 0);
-		if (hakios_fd < 0) {
-			printf("  record: open %s: %s\\n", hakios_rec_dev, strerror(errno));
-		} else {
-			off_t hakios_at = (off_t)((1 << 30) - 4096);      /* the end of the darwin window */
-
-			if (pwrite(hakios_fd, hakios_rec, (size_t)hakios_len, hakios_at) != hakios_len) {
-				printf("  record: pwrite: %s\\n", strerror(errno));
-			} else {
-				printf("  record: written at 340 GiB (%d bytes)\\n", hakios_len);
-			}
-			close(hakios_fd);
-		}
-		usleep(200000);
 	}
 """
 
@@ -155,7 +144,7 @@ def main(root):
         return 1
     text = text.replace(ANCHOR, NEW, 1)
     f.write_text(text, errors="surrogateescape")
-    print("patch-init-rawtest: records the HFS+ probe at the end of the darwin window")
+    print("patch-init-rawtest: reports rd, /usr and the data volume, and can freeze")
     return 0
 
 
