@@ -56,6 +56,7 @@ jobs:
           python3 ci/patch-init-stop.py hakios/userland
           python3 ci/patch-init-flashroot.py hakios/userland
           python3 ci/patch-init-preboom.py hakios/userland
+          python3 ci/patch-init-redwoodmount.py hakios/userland
 
       - name: toolchain shims (ld64 -> theos ld, xnu-clang -> theos clang -target arm64)
         run: |
