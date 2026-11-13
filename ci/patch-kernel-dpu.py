@@ -1095,7 +1095,7 @@ hakios_dpu_scanout_counts(uint64_t *shows, uint64_t *faults)
 # ==========================================================================
 # 2) iokit/Kernel/SweetFramebuffer.cpp -- call sites
 # ==========================================================================
-FB_EXTERN_ANCHOR = "#include <sys/systm.h>          /* bzero(), strncmp() */\n"
+FB_EXTERN_ANCHOR = None  # located at run time (see find_extern_anchor)
 # the display patch generates one of two variants of that include line; accept either.
 FB_EXTERN_ANCHOR_ALT = "#include <sys/systm.h>          /* bzero(), copyout() */\n"
 FB_EXTERN_BLOCK = r"""
@@ -1559,6 +1559,18 @@ def write(path: Path, text: str) -> bool:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8", errors="surrogateescape", newline="")
     return True
+
+
+def find_extern_anchor(text):
+    """The externs block goes right after the sys/systm.h include of SweetFramebuffer.cpp.
+
+    The display patch generates that line with different trailing comments depending on
+    which variant it takes, so locate it by its prefix instead of hard-coding it.
+    """
+    for line in text.splitlines():
+        if line.startswith("#include <sys/systm.h>"):
+            return line + "\n"
+    return None
 
 
 def splice_after(text: str, anchor: str, block: str, what: str) -> str:
