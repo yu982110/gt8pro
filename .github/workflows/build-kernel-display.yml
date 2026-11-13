@@ -1,0 +1,203 @@
+name: build lafa kernel DISPLAY (experiment)
+
+"on":
+  workflow_dispatch:
+
+jobs:
+  kernel:
+    name: bare XNU kernel for lafa (only the framebuffer patch)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 240
+
+    steps:
+      - name: checkout (device package + this workflow)
+        uses: actions/checkout@v4
+
+      - name: system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential clang lld llvm make git python3 perl flex bison m4 \
+            autoconf automake libtool pkg-config libssl-dev zlib1g-dev libxml2-dev \
+            libncurses-dev 7zip lz4 unzip curl xz-utils rsync file
+
+      - name: theos + Linux toolchain + iPhoneOS16.5 SDK
+        run: |
+          set -euo pipefail
+          git clone --recursive --depth 1 https://github.com/theos/theos.git "$HOME/theos"
+          mkdir -p "$HOME/theos/toolchain"
+          TC=https://github.com/L1ghtmann/llvm-project/releases
+          curl -fsSL "$TC/download/test-210562a/iOSToolchain-x86_64.tar.xz" | tar -xJ -C "$HOME/theos/toolchain/" || \
+            curl -fsSL "$TC/latest/download/iOSToolchain-x86_64.tar.xz" | tar -xJ -C "$HOME/theos/toolchain/"
+          test -x "$HOME/theos/toolchain/linux/iphone/bin/ld"
+          git clone --depth 1 --filter=blob:none --sparse https://github.com/theos/sdks.git "$HOME/theos/sdks-git"
+          git -C "$HOME/theos/sdks-git" sparse-checkout set iPhoneOS16.5.sdk
+          mkdir -p "$HOME/theos/sdks"
+          ln -sfn "$HOME/theos/sdks-git/iPhoneOS16.5.sdk" "$HOME/theos/sdks/iPhoneOS16.5.sdk"
+
+      - name: hakios source + lafa device package
+        run: |
+          set -euo pipefail
+          git clone --depth 1 https://github.com/oosexgang/hakios-xnu-kernel.git hakios
+          cp -r lafa hakios/devices/lafa
+          grep -q '^device lafa' hakios/devices/manifest.conf || \
+            printf '\ndevice lafa\n\tpath        devices/lafa\n' >> hakios/devices/manifest.conf
+          cd hakios
+          python3 tools/hakios-device.py check lafa
+
+      # Ubuntu 22.04 的 glibc 2.35 没有 strlcat/strlcpy（2.38 才加），XNU 的 SETUP 主机工具
+      # replacecontents 要用；ci/patch-hostcompat.py 给 hostcompat.h 补两个实现（它被 -include 进所有主机工具）。
+      - name: "patch tree (strlcpy/strlcat, clang auto-var-init)"
+        run: python3 ci/patch-hostcompat.py hakios
+
+      - name: configure
+        run: |
+          cd hakios
+          make lafa_defconfig
+          make config
+
+      - name: kernel tree (xnu/apply.sh)
+        run: |
+          cd hakios
+          [ -d xnu-src/xnu-8796.121.2 ] || xnu/apply.sh
+          ls -d xnu-src/xnu-8796.121.2
+      - name: host tools (xnu-deps/setup.sh)
+        run: |
+          cd hakios
+          set +e
+          xnu-deps/setup.sh 2>&1 | tee /tmp/setup.log
+          rc=${PIPESTATUS[0]}
+          if [ $rc -ne 0 ]; then
+            echo "::group::exporthdrs.log (tail)"
+            tail -120 xnu-deps/exporthdrs.log 2>/dev/null || echo "(no exporthdrs.log)"
+            echo "::endgroup::"
+            echo "::group::setup.log (tail)"
+            tail -60 /tmp/setup.log
+            echo "::endgroup::"
+          fi
+          exit $rc
+
+      - name: patch kernel 4K pages
+        run: python3 ci/patch-kernel-4k-pages.py hakios/xnu-src/xnu-8796.121.2
+
+      - name: patch kernel native cs hash
+        run: python3 ci/patch-kernel-native-cs-hash.py hakios/xnu-src/xnu-8796.121.2
+
+      - name: apply unixnu 4K patches
+        run: |
+          cd hakios/xnu-src/xnu-8796.121.2
+          # GitHub runs steps with bash -e, and patch(1) exits non-zero when a hunk needed fuzz or
+          # an offset -- which is every hunk here. The patches still apply; the early exit was the
+          # whole failure.
+          set +e
+          # git apply is strict about the index and about context; these patches were made against
+          # a differently patched tree, so use patch(1) with fuzz, and keep going if one hunk is
+          # already there (--forward) or reversed (--reverse-safe is not a thing; -N does that).
+          for p in $GITHUB_WORKSPACE/ci/0028-sweet-ufs-root-device.patch \
+                   $GITHUB_WORKSPACE/ci/0030-sweet-ufs-writes.patch \
+                   $GITHUB_WORKSPACE/ci/0088-fuxi-extent-root.patch \
+                   $GITHUB_WORKSPACE/ci/0103-unixnu-native-4k-bootstrap-capacity.patch \
+                   $GITHUB_WORKSPACE/ci/0104-unixnu-native-4k-user-abi.patch \
+                   $GITHUB_WORKSPACE/ci/0105-unixnu-native-4k-signature-hash-cache.patch \
+                   $GITHUB_WORKSPACE/ci/0106-pandora-4k-build-fixes.patch \
+                   $GITHUB_WORKSPACE/ci/0107-pandora-ios-address-layout.patch \
+                   $GITHUB_WORKSPACE/ci/0120-pandora-ufs-driver-init.patch \
+                   $GITHUB_WORKSPACE/ci/0122-pandora-extent-table-16k-binary-search.patch \
+                   $GITHUB_WORKSPACE/ci/0127-pandora-cs-native4k-1mib-reads.patch \
+                   $GITHUB_WORKSPACE/ci/0036-sweet-amfi-cs-signed.patch \
+                   $GITHUB_WORKSPACE/ci/0151-pandora-original-amfi-early-init.patch \
+                   $GITHUB_WORKSPACE/ci/0152-pandora-sweet-amfi-prelink-check.patch ; do
+            echo "== $(basename $p)"
+            patch -p1 -N --fuzz=3 --no-backup-if-mismatch < "$p"
+          done
+          echo "== patch leftovers"
+          find . -name '*.rej' -o -name '*.orig' | head -20
+      - name: upload sweet_ufs source
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sweet-ufs-source
+          path: |
+            hakios/xnu-src/xnu-8796.121.2/bsd/dev/sweet_ufs.c
+            hakios/xnu-src/xnu-8796.121.2/bsd/dev/sweet_ufs.c.rej
+          if-no-files-found: warn
+
+      - name: show patch rejects
+        if: always()
+        run: |
+          set +e
+          find . -name '*.rej' | head -20
+          for f in $(find . -name '*.rej' | head -6); do echo "=== $f"; cat "$f"; done | head -260
+          echo '=== end of rejects ==='
+
+      - name: patch kernel native4k early
+        run: python3 ci/patch-kernel-native4k-early.py hakios/xnu-src/xnu-8796.121.2
+
+      - name: patch kernel shared cache config
+        run: python3 ci/patch-kernel-sharedcache-config.py hakios
+
+      - name: patch kernel cs skipbig
+        run: python3 ci/patch-kernel-cs-skipbig.py hakios/xnu-src/xnu-8796.121.2
+
+      - name: patch kernel proctrace
+        run: python3 ci/patch-kernel-proctrace.py hakios/xnu-src/xnu-8796.121.2
+
+      - name: patch kernel ufsrw-all
+        run: python3 ci/patch-kernel-ufsrw-all.py hakios/xnu-src/xnu-8796.121.2
+
+      - name: patch kernel ufsrw-probe
+        run: python3 ci/patch-kernel-ufsrw-probe.py hakios/xnu-src/xnu-8796.121.2
+
+      - name: patch kernel ufsrw-bounds
+        run: python3 ci/patch-kernel-ufsrw-bounds.py hakios/xnu-src/xnu-8796.121.2
+
+      - name: patch kernel display (experiment)
+        continue-on-error: true
+        run: python3 ci/patch-kernel-display.py hakios/xnu-src 2>&1 | tail -20
+
+      - name: patch kernel darwin-min
+        run: python3 ci/patch-kernel-darwin-min.py hakios
+
+      - name: patch kernel ufsrw-force
+        run: python3 ci/patch-kernel-ufsrw-force.py hakios/xnu-src/xnu-8796.121.2
+
+      - name: patch kernel cs nocache
+        run: python3 ci/patch-kernel-cs-nocache.py hakios/xnu-src/xnu-8796.121.2
+
+      - name: patch kernel initwait
+        run: python3 ci/patch-kernel-initwait.py hakios/xnu-src/xnu-8796.121.2
+
+      - name: patch kernel framebuffer (the only patch in this build)
+        run: python3 ci/patch-kernel-fb.py hakios/xnu-src/xnu-8796.121.2
+
+
+      - name: patch kernel GIC redistributor stride
+        run: python3 ci/patch-kernel-gicr.py hakios/xnu-src/xnu-8796.121.2
+
+      - name: patch kernel live-log probes
+        run: python3 ci/patch-kernel-livelog-probe.py hakios/xnu-src/xnu-8796.121.2
+
+      - name: patch kernel skip debug-only inits
+        run: python3 ci/patch-kernel-skip-debug-init.py hakios/xnu-src/xnu-8796.121.2
+
+      - name: build kernel
+        run: |
+          cd hakios
+          set +e
+          make kernel JOBS=4 2>&1 | tee /tmp/kernel.log
+          rc=${PIPESTATUS[0]}
+          if [ $rc -ne 0 ]; then
+            echo "::group::kernel log (errors)"
+            grep -n -m 60 -E 'error:|Error [0-9]|undefined reference|fatal error|No rule' /tmp/kernel.log || tail -80 /tmp/kernel.log
+            echo "::endgroup::"
+          fi
+          exit $rc
+
+
+      - name: upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lafa-kernel-bare
+          path: hakios/hakios-kernel
+          if-no-files-found: warn
