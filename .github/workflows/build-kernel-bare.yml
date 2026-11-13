@@ -186,7 +186,16 @@ jobs:
 
       - name: patch kernel DPU scanout
         continue-on-error: true
-        run: python3 ci/patch-kernel-dpu.py hakios/xnu-src/xnu-8796.121.2 2>&1 | tail -25
+        run: |
+          echo '=== DPU patch ==='
+          set +e
+          python3 ci/patch-kernel-dpu.py hakios/xnu-src/xnu-8796.121.2 2>&1 | tail -40
+          echo "DPU patch exit: $?"
+          echo '=== DPU check ==='
+          python3 ci/patch-kernel-dpu.py --check hakios/xnu-src/xnu-8796.121.2 2>&1 | tail -10
+          echo "check exit: $?"
+          ls -l hakios/xnu-src/xnu-8796.121.2/bsd/dev/hakios_dpu.c 2>&1 || echo 'no hakios_dpu.c'
+          grep -c 'HAKIOS-LAFA-DPU' hakios/xnu-src/xnu-8796.121.2/bsd/conf/files 2>&1 || echo 'not in conf/files'
 
       - name: build kernel
         run: |
