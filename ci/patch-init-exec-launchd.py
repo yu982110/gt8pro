@@ -36,7 +36,13 @@ ADD = '''\t/*
 \t *
 \t * execve that works never returns: every line printed after it is a failure, and the wait after
 \t * the block holds such a line on the screen long enough to photograph.
+\t *
+\t * configure_inject() must run here and not after main()'s checks: the hand-over is what follows
+\t * mount_writable(), so the call further down main() is never reached, and without it
+\t * kern.exec_inject keeps an empty table -- launchd then starts every daemon without the port's
+\t * libhakios, which is why nothing painted the panel.
 \t */
+\tconfigure_inject();
 \t{
 \t\tstatic const char *const hk_ld[] = {
 \t\t\t"/redwood/sbin/launchd.darwin", "/sbin/launchd.darwin",
