@@ -237,6 +237,10 @@ jobs:
         continue-on-error: true
         run: python3 ci/patch-kernel-fileactions.py hakios/xnu-src/xnu-8796.121.2
 
+      - name: patch kernel open ok (a failed PSFA_OPEN is not fatal)
+        continue-on-error: true
+        run: python3 ci/patch-kernel-openok.py hakios/xnu-src/xnu-8796.121.2
+
       - name: patch kernel sysprobe2 (bracket MACF, audit and the handler)
         run: python3 ci/patch-kernel-sysprobe2.py hakios/xnu-src/xnu-8796.121.2
 
