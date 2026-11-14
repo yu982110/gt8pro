@@ -195,6 +195,9 @@ jobs:
       - name: patch kernel km noout (user space console writes stop painting the panel)
         run: python3 ci/patch-kernel-kmnoout.py hakios/xnu-src/xnu-8796.121.2
 
+      - name: patch kernel vcnoop (the video console draws nothing, so console writes return)
+        run: python3 ci/patch-kernel-vcnoop.py hakios/xnu-src/xnu-8796.121.2
+
       - name: remove the GPU sources from the build before the display patch
         if: false  # disabled for the red-screen test
         run: echo 'step disabled for the red-screen test'
