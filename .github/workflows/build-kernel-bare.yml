@@ -136,6 +136,9 @@ jobs:
       - name: patch kernel shared cache config
         run: python3 ci/patch-kernel-sharedcache-config.py hakios
 
+      - name: patch kernel framebuffer probe config
+        run: python3 ci/patch-kernel-fbprobe-config.py hakios
+
       - name: patch kernel cs skipbig
         run: python3 ci/patch-kernel-cs-skipbig.py hakios/xnu-src/xnu-8796.121.2
 
