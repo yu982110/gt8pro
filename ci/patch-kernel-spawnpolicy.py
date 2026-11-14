@@ -44,6 +44,7 @@ def main():
         MARK + "\n"
         "\t\tif (proctype == POSIX_SPAWN_PROC_TYPE_DRIVER) {\n"
         "\t\t\t/* allowed: this kernel does not model spawn-driver */\n"
+        "\t\t\tloader_log_line(\"HAKIOS-SPAWN-V2: DRIVER spawn allowed\\n\");\n"
         "\t\t}\n"
     )
     text = text.replace(ANCHOR, repl, 1)
