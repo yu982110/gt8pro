@@ -268,6 +268,9 @@ jobs:
       - name: patch kernel MiniIOSurface weak (the display build drops MiniIOSurface.cpp)
         run: python3 ci/patch-kernel-miniiosurface-weak.py hakios/xnu-src/xnu-8796.121.2
 
+      - name: force a clean kernel object tree (patches must be recompiled)
+        run: rm -rf hakios/xnu-src/xnu-8796.121.2/BUILD
+
       - name: build kernel
         run: |
           cd hakios
