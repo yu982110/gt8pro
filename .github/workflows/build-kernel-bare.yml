@@ -56,21 +56,14 @@ jobs:
           make lafa_defconfig
           make config
 
-      # Reuse the toolchain and the object tree between runs: a full build is ~8 minutes, an
-      # incremental one that only recompiles the patched files is 2-3.
+      # Reuse the toolchain between runs.  The object tree is not cached: a restored BUILD from a
+      # different patch set made the 4K-pages step fail before anything was compiled.
       - name: cache theos
         uses: actions/cache@v4
         with:
           path: ~/theos
           key: theos-linux-${{ hashFiles('lafa/configs/lafa.config') }}
           restore-keys: theos-linux-
-
-      - name: cache the kernel object tree
-        uses: actions/cache@v4
-        with:
-          path: hakios/xnu-src/xnu-8796.121.2/BUILD
-          key: xnu-build-${{ hashFiles('ci/patch-kernel-*.py', 'lafa/configs/lafa.config') }}
-          restore-keys: xnu-build-
 
       - name: kernel tree (xnu/apply.sh)
         run: |
