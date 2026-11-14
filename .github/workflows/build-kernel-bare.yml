@@ -241,6 +241,9 @@ jobs:
       - name: patch kernel display start (the config table is not probed here, so start the services by hand)
         continue-on-error: true
         run: python3 ci/patch-kernel-display-start.py hakios/xnu-src/xnu-8796.121.2 2>&1 | tail -10
+      - name: patch kernel display probe (who opens the framebuffer, who presents a frame)
+        continue-on-error: true
+        run: python3 ci/patch-kernel-display-probe.py hakios/xnu-src/xnu-8796.121.2 2>&1 | tail -10
       - name: patch kernel MiniIOSurface weak (the display build drops MiniIOSurface.cpp)
         run: python3 ci/patch-kernel-miniiosurface-weak.py hakios/xnu-src/xnu-8796.121.2
 
