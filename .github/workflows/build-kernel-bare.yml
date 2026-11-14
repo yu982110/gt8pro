@@ -183,6 +183,9 @@ jobs:
       - name: patch kernel exit probes (which step of a process's exit never returns)
         run: python3 ci/patch-kernel-exitprobe.py hakios/xnu-src/xnu-8796.121.2
 
+      - name: patch kernel ticker (a heartbeat that does not use the console)
+        run: python3 ci/patch-kernel-ticker.py hakios/xnu-src/xnu-8796.121.2
+
       - name: remove the GPU sources from the build before the display patch
         if: false  # disabled for the red-screen test
         run: echo 'step disabled for the red-screen test'
