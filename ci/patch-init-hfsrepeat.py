@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
-"""patch-init-hfsrepeat.py -- print the data-volume verdict over and over.
+"""patch-init-hfsrepeat.py -- print the data-volume verdict again and again.
 
 The HFS+ mount of /private/var decides whether Darwin keeps anything between boots, and
-its one-line verdict scrolls away before the phone can be photographed.  This patch adds
-a short repeat loop right after mount_writable(), so the verdict stays on the console for
-half a minute.
-
-python3 ci/patch-init-hfsrepeat.py <userland tree>
+its one-line verdict scrolls away before the phone can be photographed.  This adds a
+short repeat loop right after mount_writable(): ten lines, about three seconds apart
+(a plain busy wait, so no extra header is needed).
 """
+import re
 import sys
 from pathlib import Path
 
 MARK = "HAKIOS-HFSREPEAT"
 ANCHOR = "\tmount_writable();\n"
+
 BLOCK = (
     "\tmount_writable();\n"
     "\t/* " + MARK + ": keep the data-volume verdict on screen long enough to photograph */\n"
@@ -20,7 +20,9 @@ BLOCK = (
     "\t\tprintf(\"HAKIOS: /private/var is %s (repeat %d of 10)\\n\",\n"
     "\t\t    var_kept ? \"HFS Plus, kept between boots\" : \"a memory filesystem (HFS+ mount failed)\",\n"
     "\t\t    hakios_hr + 1);\n"
-    "\t\tsleep(3);\n"
+    "\t\tfor (volatile unsigned long hakios_hw = 0; hakios_hw < 400000000UL; hakios_hw++) {\n"
+    "\t\t\t/* busy wait: no header, about three seconds on this SoC */\n"
+    "\t\t}\n"
     "\t}\n"
 )
 
@@ -47,18 +49,9 @@ def main() -> int:
         print("patch-init-hfsrepeat: already applied")
         return 0
     if ANCHOR not in text:
-        return fail("mount_writable(); anchor not found (has exec-launchd already moved it?)")
-    # var_kept has to exist as a file-scope name for the loop to compile
+        return fail("mount_writable(); anchor not found")
     if "var_kept" not in text:
         return fail("var_kept not found -- is this the init that mounts a data volume?")
-
-    # sleep() lives in unistd.h, which this init does not include yet
-    if "#include <unistd.h>" not in text:
-        import re as _re
-        m = _re.search(r"^#include [^\\n]*\\n", text, _re.M)
-        if m is None:
-            return fail("no #include line at all to hang <unistd.h> on")
-        text = text[:m.end()] + "#include <unistd.h>\\n" + text[m.end():]
 
     text = text.replace(ANCHOR, BLOCK, 1)
     candidate.write_text(text, encoding="utf-8", errors="surrogateescape")
