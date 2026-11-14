@@ -54,12 +54,11 @@ def main() -> int:
 
     # sleep() lives in unistd.h, which this init does not include yet
     if "#include <unistd.h>" not in text:
-        for inc in ("#include <sys/stat.h>\\n", "#include <stdio.h>\\n", "#include <string.h>\\n", "#include <errno.h>\\n"):
-            if inc in text:
-                text = text.replace(inc, inc + "#include <unistd.h>\\n", 1)
-                break
-        else:
-            return fail("no include line to hang <unistd.h> on")
+        import re as _re
+        m = _re.search(r"^#include [^\\n]*\\n", text, _re.M)
+        if m is None:
+            return fail("no #include line at all to hang <unistd.h> on")
+        text = text[:m.end()] + "#include <unistd.h>\\n" + text[m.end():]
 
     text = text.replace(ANCHOR, BLOCK, 1)
     candidate.write_text(text, encoding="utf-8", errors="surrogateescape")
