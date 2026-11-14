@@ -225,6 +225,10 @@ jobs:
         continue-on-error: true
         run: python3 ci/patch-kernel-retprobe.py hakios/xnu-src/xnu-8796.121.2
 
+      - name: patch kernel priv grant (root gets every privilege)
+        continue-on-error: true
+        run: python3 ci/patch-kernel-privgrant.py hakios/xnu-src/xnu-8796.121.2
+
       - name: patch kernel sysprobe2 (bracket MACF, audit and the handler)
         run: python3 ci/patch-kernel-sysprobe2.py hakios/xnu-src/xnu-8796.121.2
 
