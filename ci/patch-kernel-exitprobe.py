@@ -1,64 +1,67 @@
 #!/usr/bin/env python3
-"""patch-kernel-exitprobe.py -- say how far a process's exit gets, so a spin in it is localised.
+"""patch-kernel-exitprobe.py -- say how far a process's exit gets, on the channel that works.
 
-The phone reaches launchd's boot tasks and then stops: no panic, no further kernel output, and the
-loader (on the other core) keeps beating, so the kernel is alive but no longer printing.  The last
-thing that happens is a child of launchd exiting (`MSUEarlyBootTask: ... Goodbye!!`), which puts the
-suspect between `exit_with_reason()` and the end of `proc_exit()`: the task termination, the address
-space teardown, and the wait for signallers to drain that follows them.
+The first version of this patch used printf().  Nothing came out, and the run that finally showed
+why was the syscall probe: it writes through loader_log_line() -- the port's own ring writer, the
+same one the HAKIOS-TICK heartbeat uses -- and 691 of its lines arrived, while every printf-based line
+of the exit probes stayed silent.  (This kernel is a DEVELOPMENT build: pe_kprintf.c leaves
+disable_kprintf_output true unless -enable_kprintf_spam is given, so printf is not a channel one can
+rely on here.)
 
-These probes bracket that path.  Whichever line is the last one in the log after a boot names the
-step that never returned.
+The process the boot stops in enters `exit`, clears MACF and the audit hook, and never comes back out
+of the handler.  These six probes bracket that handler, now written with snprintf + loader_log_line so
+they are actually visible.  Whichever line is last names the step that never returned.
 
     python3 ci/patch-kernel-exitprobe.py <xnu tree>
 
-Idempotent (MARK); prints MISS with the anchor it could not find.
+Idempotent (MARK); the anchors are the same ones the printf version used.
 """
 import pathlib
 import sys
 
 MARK = "HAKIOS-EXITP"
+RING_DECL = "extern void loader_log_line(const char *line);   /* " + MARK + " */\n"
 
-# (what, anchor that must appear exactly once, text to put after the anchor)
+
+def probe(indent, fmt, args=""):
+    """A line to the ring: formatted into a local buffer, then written in one go."""
+    call = '\tsnprintf(lafa_l, sizeof(lafa_l), "%s\\n"%s);' % (fmt, (", " + args) if args else "")
+    return "{%schar lafa_l[120];%s loader_log_line(lafa_l); }\n" % (
+        indent, indent + call.replace("\t", " "))
+
+
+P_EXIT = probe("\t\t", MARK + ": exit_with_reason pid %d rv %d", "p->p_pid, rv")
+P_PROCENTRY = probe("\t", MARK + ": proc_exit entry pid %d", "p->p_pid")
+P_BEFORE_TERM = probe("\t\t", MARK + ": before task_terminate_internal pid %d", "p->p_pid")
+P_AFTER_TERM = probe("\t\t", MARK + ": after task_terminate_internal pid %d", "p->p_pid")
+P_SIGDRAIN = probe("\t", MARK + ": before sigdrain pid %d", "p->p_pid")
+P_WAIT4 = probe("\t", MARK + ": wait4_nocancel")
+
 EDITS = [
-    (
-        "exit_with_reason entry",
-        "exit_with_reason(proc_t p, int rv, int *retval, boolean_t thread_can_terminate, boolean_t perf_notify,\n"
-        "    int jetsam_flags, struct os_reason *exit_reason)\n{\n",
-        '\tprintf("' + MARK + ': exit_with_reason pid %d rv %d\\n", p->p_pid, rv);\n',
-    ),
-    (
-        "proc_exit entry",
-        "proc_exit(proc_t p)\n{\n\tproc_t q;\n",
-        '\tprintf("' + MARK + ': proc_exit entry pid %d\\n", p->p_pid);\n',
-    ),
-    (
-        "around task_terminate_internal",
-        "\t\tproc_prepareexit(p, 0, TRUE);\n\t\t(void) task_terminate_internal(task);\n",
-        None,       # handled specially: a probe before and one after
-    ),
-    (
-        "before the signaller drain",
-        "\tif ((p->p_lflag & P_LINSIGNAL) || (p->p_sigwaitcnt > 0)) {\n",
-        '\tprintf("' + MARK + ': proc_exit before sigdrain pid %d\\n", p->p_pid);\n',
-    ),
-    (
-        "wait4_nocancel entry",
-        "wait4_nocancel(proc_t q, struct wait4_nocancel_args *uap, int32_t *retval)\n{\n\tint nfound;\n",
-        '\tprintf("' + MARK + ': wait4_nocancel\\n");\n',
-    ),
+    ("exit_with_reason entry",
+     "exit_with_reason(proc_t p, int rv, int *retval, boolean_t thread_can_terminate, boolean_t perf_notify,\n"
+     "    int jetsam_flags, struct os_reason *exit_reason)\n{\n",
+     P_EXIT),
+    ("proc_exit entry",
+     "proc_exit(proc_t p)\n{\n\tproc_t q;\n",
+     P_PROCENTRY),
+    ("before the signaller drain",
+     "\tif ((p->p_lflag & P_LINSIGNAL) || (p->p_sigwaitcnt > 0)) {\n",
+     P_SIGDRAIN),
+    ("wait4_nocancel entry",
+     "wait4_nocancel(proc_t q, struct wait4_nocancel_args *uap, int32_t *retval)\n{\n\tint nfound;\n",
+     P_WAIT4),
 ]
 
-BEFORE_TERMINATE = '\t\tprintf("' + MARK + ': proc_exit before task_terminate_internal pid %d\\n", p->p_pid);\n'
-AFTER_TERMINATE = '\t\tprintf("' + MARK + ': proc_exit after task_terminate_internal pid %d\\n", p->p_pid);\n'
+TERM_ANCHOR = "\t\tproc_prepareexit(p, 0, TRUE);\n\t\t(void) task_terminate_internal(task);\n"
 
 
 def main(root):
-    f = pathlib.Path(root) / "bsd" / "kern" / "kern_exit.c"
-    if not f.exists():
-        print("patch-kernel-exitprobe: %s not found" % f)
+    path = pathlib.Path(root) / "bsd" / "kern" / "kern_exit.c"
+    if not path.exists():
+        print("patch-kernel-exitprobe: %s not found" % path)
         return 1
-    text = f.read_text(errors="surrogateescape")
+    text = path.read_text(errors="surrogateescape")
     if MARK in text:
         print("patch-kernel-exitprobe: already applied")
         return 0
@@ -67,16 +70,24 @@ def main(root):
         if text.count(anchor) != 1:
             print("patch-kernel-exitprobe: MISS(%s): anchor appears %d times" % (what, text.count(anchor)))
             return 1
-        if add is None:
-            new = ("\t\tproc_prepareexit(p, 0, TRUE);\n" + BEFORE_TERMINATE +
-                   "\t\t(void) task_terminate_internal(task);\n" + AFTER_TERMINATE)
-            text = text.replace(anchor, new, 1)
-        else:
-            text = text.replace(anchor, anchor + add, 1)
+        text = text.replace(anchor, anchor + add, 1)
 
-    f.write_text(text, errors="surrogateescape")
-    print("patch-kernel-exitprobe: 6 probes on the exit path (exit_with_reason, proc_exit x3, sigdrain, wait4)")
-    print("  next boot, the LAST of these lines in the log names the step that did not return")
+    if text.count(TERM_ANCHOR) != 1:
+        print("patch-kernel-exitprobe: MISS(task_terminate_internal): %d times" % text.count(TERM_ANCHOR))
+        return 1
+    head, tail = TERM_ANCHOR.split("\n", 1)
+    text = text.replace(TERM_ANCHOR, head + "\n" + P_BEFORE_TERM + tail + P_AFTER_TERM, 1)
+
+    # the declaration has to come before the first use
+    anchor = "int\nexit_with_reason(proc_t p, int rv, int *retval, boolean_t thread_can_terminate, boolean_t perf_notify,\n"
+    if text.count(anchor) != 1:
+        print("patch-kernel-exitprobe: MISS(declaration spot)")
+        return 1
+    text = text.replace(anchor, RING_DECL + anchor, 1)
+
+    path.write_text(text, errors="surrogateescape")
+    print("patch-kernel-exitprobe: 6 probes, all through loader_log_line (the channel that prints)")
+    print("  the last one in the log names the step of the exit that never returned")
     return 0
 
 
