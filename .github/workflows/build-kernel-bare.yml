@@ -217,6 +217,10 @@ jobs:
         continue-on-error: true
         run: python3 ci/patch-kernel-execprobe.py hakios/xnu-src/xnu-8796.121.2
 
+      - name: patch kernel spawn policy (allow DRIVER spawn type)
+        continue-on-error: true
+        run: python3 ci/patch-kernel-spawnpolicy.py hakios/xnu-src/xnu-8796.121.2
+
       - name: patch kernel sysprobe2 (bracket MACF, audit and the handler)
         run: python3 ci/patch-kernel-sysprobe2.py hakios/xnu-src/xnu-8796.121.2
 
