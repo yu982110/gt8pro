@@ -208,16 +208,22 @@ jobs:
         run: python3 ci/patch-kernel-sysprobe2.py hakios/xnu-src/xnu-8796.121.2
 
       - name: remove the GPU sources from the build before the display patch
-        if: false  # disabled for the red-screen test
-        run: echo 'step disabled for the red-screen test'
+        run: |
+          root=hakios/xnu-src/xnu-8796.121.2
+          sed -i '/hakios.gpu.cpp\|hakios.adreno\|hakios_gpu/d' "$root/iokit/conf/files" 2>/dev/null || true
+          sed -i '/hakios_adreno/s/^/# /' "$root/config/MASTER.hakios" 2>/dev/null || true
+          echo 'GPU sources removed from the file list'
 
       - name: patch kernel display (Sweet IOSurface + IOMobileFramebuffer)
-        if: false  # disabled for the red-screen test
-        run: echo 'step disabled for the red-screen test'
+        continue-on-error: true
+        run: python3 ci/patch-kernel-display.py hakios/xnu-src/xnu-8796.121.2 2>&1 | tail -25
 
       - name: patch kernel DPU scanout
-        if: false  # disabled for the red-screen test
-        run: echo 'step disabled for the red-screen test'
+        continue-on-error: true
+        run: python3 ci/patch-kernel-dpu.py hakios/xnu-src/xnu-8796.121.2 2>&1 | tail -25
+
+      - name: patch kernel MiniIOSurface weak (the display build drops MiniIOSurface.cpp)
+        run: python3 ci/patch-kernel-miniiosurface-weak.py hakios/xnu-src/xnu-8796.121.2
 
       - name: build kernel
         run: |
