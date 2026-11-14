@@ -67,7 +67,7 @@ jobs:
           python3 ci/patch-init-jobbind.py hakios/userland
           python3 ci/patch-init-varseed.py hakios/userland
           python3 ci/patch-init-xpcproxy.py hakios/userland
-# (removed) patch-init-hfsrepeat.py  -- its 10 x 3 s repeat held the boot for ~30 s
+          # (removed) patch-init-hfsrepeat.py: its 10 x 3 s repeat held the boot for ~30 s
           python3 ci/patch-init-exec-launchd.py hakios/userland
 
       - name: toolchain shims (ld64 -> theos ld, xnu-clang -> theos clang -target arm64)
