@@ -76,6 +76,28 @@ jobs:
           echo "--- prebuilt/userland present? ---"
           ls ../prebuilt/userland 2>/dev/null | head -5 || echo "(no prebuilt dir)"
 
+      - name: our init.c changes
+        run: |
+          set -euo pipefail
+          python3 ci/patch-init-cache-probe.py hakios
+          python3 ci/patch-init-ramfs.py hakios/userland
+          python3 ci/patch-init-datavol.py hakios/userland
+          python3 ci/patch-init-ufsreport.py hakios/userland
+          python3 ci/patch-init-rawtest.py hakios/userland
+          python3 ci/patch-init-stop.py hakios/userland
+          python3 ci/patch-init-flashroot.py hakios/userland
+          python3 ci/patch-init-preboom.py hakios/userland
+          python3 ci/patch-init-redwoodmount.py hakios/userland
+          python3 ci/patch-init-rcdiag.py hakios/userland
+          python3 ci/patch-init-volprobe.py hakios/userland
+          # (removed) patch-init-final.py: only a debug listing of /redwood, and it costs bytes
+          python3 ci/patch-init-cachefix.py hakios/userland
+          python3 ci/patch-init-jobbind.py hakios/userland
+          python3 ci/patch-init-varseed.py hakios/userland
+          python3 ci/patch-init-xpcproxy.py hakios/userland
+          # (removed) patch-init-hfsrepeat.py: its 10 x 3 s repeat held the boot for ~30 s
+          python3 ci/patch-init-exec-launchd.py hakios/userland
+
       - name: build the root image
         run: |
           set +e
