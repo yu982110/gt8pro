@@ -39,7 +39,7 @@ ANCHOR_GUARD = (
     "\t\t\t\t    fp, kGUARD_EXC_NOCLOEXEC);\n"
 )
 GUARD = (
-    "\t\t\t\t" + GUARD_MARK + ": the guard check is not modelled; inherit anyway\n"
+    "\t\t\t\t" + GUARD_MARK[:-2] + ": the guard check is not modelled; inherit anyway */\n"
     "\t\t\t\terror = 0;\n"
     "\t\t\t\tfp->fp_flags &= ~FP_CLOEXEC;\n"
 )
