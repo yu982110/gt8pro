@@ -52,6 +52,15 @@ def main() -> int:
     if "var_kept" not in text:
         return fail("var_kept not found -- is this the init that mounts a data volume?")
 
+    # sleep() lives in unistd.h, which this init does not include yet
+    if "#include <unistd.h>" not in text:
+        for inc in ("#include <sys/stat.h>\\n", "#include <stdio.h>\\n", "#include <string.h>\\n", "#include <errno.h>\\n"):
+            if inc in text:
+                text = text.replace(inc, inc + "#include <unistd.h>\\n", 1)
+                break
+        else:
+            return fail("no include line to hang <unistd.h> on")
+
     text = text.replace(ANCHOR, BLOCK, 1)
     candidate.write_text(text, encoding="utf-8", errors="surrogateescape")
     print("patch-init-hfsrepeat: added the 30 s verdict loop")
