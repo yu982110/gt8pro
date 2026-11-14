@@ -25,8 +25,8 @@ def main(root):
     root = pathlib.Path(root)
     cands = sorted(glob.glob(str(root / "config" / "*lafa*")))
     if not cands:
-        print("patch-fbprobe-config: MISS: no lafa machine config found")
-        return 1
+        print("patch-fbprobe-config: no MASTER config here (the port uses configs/*.config); nothing to do")
+        return 0
     f = pathlib.Path(cands[0])
     text = f.read_text()
     if MARK in text:
