@@ -24,13 +24,7 @@ ANCHOR_ERR = (
 )
 PROBE = (
     MARK + "\n"
-    "\t\t\t{\n"
-    "\t\t\t\tchar lafa_fa[112];\n"
-    "\t\t\t\tsnprintf(lafa_fa, sizeof(lafa_fa),\n"
-    "\t\t\t\t    \"HAKIOS-FACT: type %d fd %d err %d\\n\",\n"
-    "\t\t\t\t    (int)psfa->psfaa_type, psfa->psfaa_filedes, error);\n"
-    "\t\t\t\tloader_log_line(lafa_fa);\n"
-    "\t\t\t}\n"
+    "\t\t\tloader_log_line(\"HAKIOS-FACT: a spawn file action failed\\n\");\n"
 )
 
 ANCHOR_GUARD = (
