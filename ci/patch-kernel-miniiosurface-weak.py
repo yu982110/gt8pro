@@ -7,15 +7,17 @@ osfmk/arm64/loader_return.c still declares and calls
 
     extern void MiniIOSurfaceUsage(uint32_t *count, uint64_t *bytes);
     ...
-    MiniIOSurfaceUsage(&surfaces, &surface_bytes);
+    MiniIOSurfaceUsage(&surfaces, &surface_bytes);      (inside hakios_memory_line)
 
 so the kernel fails to link with exactly one undefined symbol:
 
     Undefined symbols for architecture arm64:
-      "_MiniIOSurfaceUsage", referenced from: ...
+      "_MiniIOSurfaceUsage", referenced from:
+      _hakios_memory_line in loader_return.o
 
-Making the declaration weak and guarding the call keeps the log line when the function exists
-(the plain build) and skips it when it does not (the display build).
+A weak declaration is not enough: this kernel links with undefined weak imports fatal.  The call only
+adds surface counts to a log line, so the log line drops that part when the function is not compiled
+in -- the numbers it would print come from SweetSurface.cpp's own accounting.
 
     python3 ci/patch-kernel-miniiosurface-weak.py <xnu source tree>
 """
@@ -23,40 +25,39 @@ import pathlib
 import sys
 
 FILE = "osfmk/arm64/loader_return.c"
-MARK = "HAKIOS-MINI-WEAK"
+MARK = "HAKIOS-MINI-OUT"
 
 OLD_DECL = "extern void MiniIOSurfaceUsage(uint32_t *count, uint64_t *bytes);"
-NEW_DECL = ("/* " + MARK + ": MiniIOSurface.cpp is not in the display build, so the symbol may be absent. */\n"
-            "extern void MiniIOSurfaceUsage(uint32_t *count, uint64_t *bytes) __attribute__((weak));")
 
 
 def main(root):
     p = pathlib.Path(root) / FILE
     if not p.exists():
-        print("patch-miniiosurface-weak: MISS: no", FILE)
+        print("patch-miniiosurface-out: MISS: no", FILE)
         return 1
     text = p.read_text(errors="surrogateescape")
     if MARK in text:
-        print("patch-miniiosurface-weak: already applied")
+        print("patch-miniiosurface-out: already applied")
         return 0
     if OLD_DECL not in text:
-        print("patch-miniiosurface-weak: MISS: the declaration is not the one this patch knows")
+        print("patch-miniiosurface-out: MISS: the declaration is not the one this patch knows")
         return 1
-    text = text.replace(OLD_DECL, NEW_DECL, 1)
-    # guard every call
-    n = 0
+    text = text.replace(
+        OLD_DECL,
+        "/* " + MARK + ": MiniIOSurface.cpp is not in the display build; the surface counts below\n"
+        " * come from SweetSurface.cpp instead, so this declaration and its call are left out. */",
+        1)
     out = []
+    n = 0
     for line in text.split("\n"):
-        if "MiniIOSurfaceUsage(&" in line and "if (" not in line:
+        if "MiniIOSurfaceUsage(&" in line and not line.lstrip().startswith("/*"):
             indent = line[:len(line) - len(line.lstrip())]
-            out.append(indent + "if (MiniIOSurfaceUsage != 0) {")
-            out.append(line)
-            out.append(indent + "}")
+            out.append(indent + "/* " + MARK + ": " + line.strip() + " -- not in this build */")
             n += 1
         else:
             out.append(line)
     p.write_text("\n".join(out), errors="surrogateescape")
-    print(f"patch-miniiosurface-weak: weak declaration, {n} call(s) guarded")
+    print(f"patch-miniiosurface-out: declaration replaced, {n} call(s) commented out")
     return 0
 
 
