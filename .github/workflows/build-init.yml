@@ -64,6 +64,7 @@ jobs:
           python3 ci/patch-init-jobbind.py hakios/userland
           python3 ci/patch-init-varseed.py hakios/userland
           python3 ci/patch-init-xpcproxy.py hakios/userland
+          python3 ci/patch-init-hfsrepeat.py hakios/userland
           python3 ci/patch-init-exec-launchd.py hakios/userland
 
       - name: toolchain shims (ld64 -> theos ld, xnu-clang -> theos clang -target arm64)
