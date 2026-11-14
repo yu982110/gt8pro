@@ -10,12 +10,12 @@ two calls GenericARMPE made to start them:
 
 Sweet relies on personalities in iokit/KernelConfigTables.cpp (IOClass = AppleCLCD,
 IOProviderClass = IOResources) and this kernel never matches them: the boot log shows no
-"SWEET SURF: IOCoreSurfaceRoot registered" and no "SWEET FB:" line at all, so the IOMobileFramebuffer
-service does not exist and nothing can open it.  The port's own Mini drivers never relied on that
-either -- MiniIOSurfaceStart() allocates, attaches and starts the service itself.
+"SWEET SURF:" and no "SWEET FB:" line at all, so the IOMobileFramebuffer service does not exist and
+nothing can open it.  The port's own Mini drivers never relied on that: MiniIOSurfaceStart()
+allocates, attaches and starts the service itself.
 
-This patch puts that pattern back, next to where the two calls were commented out, and adds the
-helper to SweetFramebuffer.cpp (which sees both class definitions).
+Each class lives in its own file, so each file gets its own helper -- SweetSurface.cpp sees
+IOCoreSurfaceRoot, SweetFramebuffer.cpp sees AppleCLCD -- and GenericARMPE.cpp calls both.
 
     python3 ci/patch-kernel-display-start.py <xnu source tree>
 """
@@ -24,29 +24,35 @@ import sys
 
 MARK = "HAKIOS-LAFA-DISPLAY-START"
 
-HELPER = r'''
+SURFACE_HELPER = r'''
 
-/* %MARK%: the config table's personalities are not probed on this kernel, so the two services are
- * created and started by hand, the way MiniIOSurfaceStart()/MiniIOMobileFramebufferStart() did it.
- * Each IOLog below is the line to look for in the boot log: no line, no service. */
+/* %MARK%: start the surface root by hand (the config table's personalities are not probed here).
+ * The IOLog line is the one to look for in the boot log: no line, no service. */
 extern "C" void
-sweet_display_start(IOService *provider)
+sweet_surface_start(IOService *provider)
 {
-	IOCoreSurfaceRoot *surf;
-	AppleCLCD *clcd;
+	IOCoreSurfaceRoot *root = OSTypeAlloc(IOCoreSurfaceRoot);
 
-	surf = OSTypeAlloc(IOCoreSurfaceRoot);
-	if (surf == NULL) {
+	if (root == NULL) {
 		IOLog("SWEET SURF: out of memory\n");
-	} else if (!surf->init() || !surf->attach(provider)) {
+	} else if (!root->init() || !root->attach(provider)) {
 		IOLog("SWEET SURF: init/attach failed\n");
-	} else if (!surf->start(provider)) {
+	} else if (!root->start(provider)) {
 		IOLog("SWEET SURF: start failed\n");
 	} else {
 		IOLog("SWEET SURF: started by hand\n");
 	}
+}
+'''.replace("%MARK%", MARK)
 
-	clcd = OSTypeAlloc(AppleCLCD);
+FB_HELPER = r'''
+
+/* %MARK%: start the framebuffer service by hand (see SweetSurface.cpp for why). */
+extern "C" void
+sweet_framebuffer_start(IOService *provider)
+{
+	AppleCLCD *clcd = OSTypeAlloc(AppleCLCD);
+
 	if (clcd == NULL) {
 		IOLog("SWEET FB: out of memory\n");
 	} else if (!clcd->init() || !clcd->attach(provider)) {
@@ -60,12 +66,14 @@ sweet_display_start(IOService *provider)
 '''.replace("%MARK%", MARK)
 
 IOMFB_COMMENT = "/* MiniIOMobileFramebufferStart(this); */"
-IOMFB_ANCHOR = "/* HAKIOS-LAFA-DISPLAY: the display services are SweetSurface / SweetFramebuffer now */"
 
-CALL = ("    /* " + MARK + ": the services exist only if this runs (see SweetFramebuffer.cpp) */\n"
-        "    sweet_display_start(this);\n")
+CALLS = ("    /* " + MARK + ": the services exist only if these run (see SweetSurface/SweetFramebuffer.cpp) */\n"
+         "    sweet_surface_start(this);\n"
+         "    sweet_framebuffer_start(this);\n")
 
-DECL = ("\n/* " + MARK + " */\nextern \"C\" void sweet_display_start(IOService *provider);\n")
+DECL = ("\n/* " + MARK + " */\n"
+        "extern \"C\" void sweet_surface_start(IOService *provider);\n"
+        "extern \"C\" void sweet_framebuffer_start(IOService *provider);\n")
 
 
 def read(p):
@@ -76,38 +84,38 @@ def write(p, text):
     p.write_text(text, encoding="utf-8", errors="surrogateescape", newline="")
 
 
+def append_helper(path, helper, label):
+    text = read(path)
+    if MARK in text:
+        print(f"patch-display-start: {label} helper already there")
+        return True
+    write(path, text + helper)
+    print(f"patch-display-start: {label} helper added")
+    return True
+
+
 def main(root):
     root = pathlib.Path(root)
+    surf = root / "iokit" / "Kernel" / "SweetSurface.cpp"
     fb = root / "iokit" / "Kernel" / "SweetFramebuffer.cpp"
     pe = root / "iokit" / "Kernel" / "GenericARMPE.cpp"
-    if not fb.is_file():
-        print("patch-display-start: MISS: no SweetFramebuffer.cpp (run patch-kernel-display.py first)")
-        return 1
-    if not pe.is_file():
-        print("patch-display-start: MISS: no GenericARMPE.cpp")
-        return 1
-
-    text = read(fb)
-    if MARK not in text:
-        if "#include \"SweetSurface.h\"" not in text:
-            print("patch-display-start: MISS: SweetFramebuffer.cpp does not include SweetSurface.h")
+    for p, what in ((surf, "SweetSurface.cpp"), (fb, "SweetFramebuffer.cpp"), (pe, "GenericARMPE.cpp")):
+        if not p.is_file():
+            print(f"patch-display-start: MISS: no {what} (run patch-kernel-display.py first)")
             return 1
-        write(fb, text + HELPER)
-        print("patch-display-start: helper added to SweetFramebuffer.cpp")
-    else:
-        print("patch-display-start: helper already there")
+    append_helper(surf, SURFACE_HELPER, "surface")
+    append_helper(fb, FB_HELPER, "framebuffer")
 
     text = read(pe)
     if MARK in text:
-        print("patch-display-start: call already there")
+        print("patch-display-start: the calls are already there")
         return 0
     if IOMFB_COMMENT not in text:
         print("patch-display-start: MISS: the commented Mini start is not in GenericARMPE.cpp")
         return 1
     at = text.find(IOMFB_COMMENT)
     end = text.find("\n", at) + 1
-    text = text[:end] + CALL + text[end:]
-    # declaration: after the last #include at the top
+    text = text[:end] + CALLS + text[end:]
     last_inc = 0
     for line in text.split("\n"):
         if line.lstrip().startswith("#include"):
@@ -115,7 +123,7 @@ def main(root):
     if last_inc > 0:
         text = text[:last_inc] + "\n" + DECL + text[last_inc:]
     write(pe, text)
-    print("patch-display-start: sweet_display_start(this) inserted after the commented Mini start")
+    print("patch-display-start: sweet_surface_start / sweet_framebuffer_start inserted at the PE init")
     return 0
 
 
