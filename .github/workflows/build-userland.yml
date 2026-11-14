@@ -76,6 +76,20 @@ jobs:
           echo "--- prebuilt/userland present? ---"
           ls ../prebuilt/userland 2>/dev/null | head -5 || echo "(no prebuilt dir)"
 
+      - name: toolchain shims (ld64 -> theos ld, else build.sh uses the prebuilt binaries)
+        run: |
+          set -euo pipefail
+          TC="$HOME/theos/toolchain/linux/iphone/bin"
+          ls "$TC" | tr '\n' ' '; echo
+          sudo ln -sf "$TC/ld" /usr/local/bin/ld64
+          sudo tee /usr/local/bin/xnu-clang >/dev/null <<'EOF'
+          #!/bin/sh
+          exec "$HOME/theos/toolchain/linux/iphone/bin/clang" -target arm64-apple-ios16.0 "$@"
+          EOF
+          sudo chmod +x /usr/local/bin/xnu-clang
+          command -v ld64
+          ld64 -v 2>&1 | head -2 || true
+
       - name: our init.c changes
         run: |
           set -euo pipefail
