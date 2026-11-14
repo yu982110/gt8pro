@@ -30,6 +30,22 @@ INSERTS = [
     ("AppleCLCD::swap(const uint8_t *rec)", "HAKIOS-DISPLAY: swap\\n"),
 ]
 
+# Inserted before the IOLog that ends AppleCLCD::start: is the display node the framework waits for
+# actually in the registry? IOMobileFramebuffer.framework counts /arm-io children whose device_type is
+# "display-subsystem" and then waits for that many IOMobileFramebuffer services.
+NODE_PROBE_ANCHOR = 'IOLog("SWEET FB: AppleCLCD %ux%u stride'
+NODE_PROBE = '''	{
+		IORegistryEntry *node = IORegistryEntry::fromPath("/arm-io/disp0", gIODTPlane);
+
+		loader_log_line(node != NULL ? "HAKIOS-DISPLAY: disp0 node present\\n"
+		    : "HAKIOS-DISPLAY: disp0 node MISSING (the framework will not wait for us)\\n");
+		if (node != NULL) {
+			node->release();
+		}
+		loader_log_line("HAKIOS-DISPLAY: AppleCLCD registered\\n");
+	}
+'''
+
 
 def main(root):
     p = pathlib.Path(root) / FILE
@@ -56,6 +72,14 @@ def main(root):
         added += 1
     if added == 0:
         return 1
+    # the display-node probe, right before the IOLog that ends AppleCLCD::start
+    i = text.find(NODE_PROBE_ANCHOR)
+    if i >= 0:
+        line_start = text.rfind("\n", 0, i) + 1
+        text = text[:line_start] + NODE_PROBE + text[line_start:]
+        added += 1
+    else:
+        print("patch-display-probe: MISS: the end-of-start IOLog is not there")
     # the declaration goes after the last #include of the file
     last = 0
     for ln in text.split("\n"):
