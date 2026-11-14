@@ -194,6 +194,13 @@ jobs:
       - name: patch kernel skip debug-only inits
         run: python3 ci/patch-kernel-skip-debug-init.py hakios/xnu-src/xnu-8796.121.2
 
+      - name: patch kernel process sampler
+        continue-on-error: true
+        run: |
+          echo '=== procsample ==='
+          python3 ci/patch-kernel-procsample.py hakios/xnu-src/xnu-8796.121.2 2>&1 | tail -20
+          grep -c 'HAKIOS-PROCSAMPLE' hakios/xnu-src/xnu-8796.121.2/bsd/kern/bsd_init.c 2>&1 || echo 'not applied'
+
       - name: build kernel
         run: |
           cd hakios
