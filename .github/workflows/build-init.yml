@@ -16,6 +16,9 @@ name: build lafa init
 
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/build-init.yml'
 
 jobs:
   init:
