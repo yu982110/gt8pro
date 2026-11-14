@@ -28,19 +28,21 @@ SURFACE_HELPER = r'''
 
 /* %MARK%: start the surface root by hand (the config table's personalities are not probed here).
  * The IOLog line is the one to look for in the boot log: no line, no service. */
+extern "C" void loader_log_line(const char *line);
+
 extern "C" void
 sweet_surface_start(IOService *provider)
 {
 	IOCoreSurfaceRoot *root = OSTypeAlloc(IOCoreSurfaceRoot);
 
 	if (root == NULL) {
-		IOLog("SWEET SURF: out of memory\n");
+		loader_log_line("HAKIOS-DISPLAY: SWEET SURF out of memory\n");
 	} else if (!root->init() || !root->attach(provider)) {
-		IOLog("SWEET SURF: init/attach failed\n");
+		loader_log_line("HAKIOS-DISPLAY: SWEET SURF init/attach failed\n");
 	} else if (!root->start(provider)) {
-		IOLog("SWEET SURF: start failed\n");
+		loader_log_line("HAKIOS-DISPLAY: SWEET SURF start failed\n");
 	} else {
-		IOLog("SWEET SURF: started by hand\n");
+		loader_log_line("HAKIOS-DISPLAY: SWEET SURF started by hand\n");
 	}
 }
 '''.replace("%MARK%", MARK)
@@ -48,19 +50,21 @@ sweet_surface_start(IOService *provider)
 FB_HELPER = r'''
 
 /* %MARK%: start the framebuffer service by hand (see SweetSurface.cpp for why). */
+extern "C" void loader_log_line(const char *line);
+
 extern "C" void
 sweet_framebuffer_start(IOService *provider)
 {
 	AppleCLCD *clcd = OSTypeAlloc(AppleCLCD);
 
 	if (clcd == NULL) {
-		IOLog("SWEET FB: out of memory\n");
+		loader_log_line("HAKIOS-DISPLAY: SWEET FB out of memory\n");
 	} else if (!clcd->init() || !clcd->attach(provider)) {
-		IOLog("SWEET FB: init/attach failed\n");
+		loader_log_line("HAKIOS-DISPLAY: SWEET FB init/attach failed\n");
 	} else if (!clcd->start(provider)) {
-		IOLog("SWEET FB: start failed\n");
+		loader_log_line("HAKIOS-DISPLAY: SWEET FB start failed\n");
 	} else {
-		IOLog("SWEET FB: started by hand\n");
+		loader_log_line("HAKIOS-DISPLAY: SWEET FB started by hand\n");
 	}
 }
 '''.replace("%MARK%", MARK)
