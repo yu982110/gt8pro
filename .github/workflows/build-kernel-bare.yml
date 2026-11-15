@@ -114,7 +114,7 @@ jobs:
       - name: patch kernel 4K pages
         run: python3 ci/patch-kernel-4k-pages.py hakios/xnu-src/xnu-8796.121.2
 
-      - name: patch kernel SMP (all eight cores: Aff2 masks)
+      - name: patch kernel SMP (all eight cores, Aff2 masks)
         continue-on-error: true
         run: python3 ci/patch-kernel-smp-aff2.py hakios/xnu-src/xnu-8796.121.2
 
@@ -305,7 +305,7 @@ jobs:
       - name: patch kernel display start (the config table is not probed here, so start the services by hand)
         continue-on-error: true
         run: python3 ci/patch-kernel-display-start.py hakios/xnu-src/xnu-8796.121.2 2>&1 | tail -10
-      - name: patch kernel HID start (IOResources provider; the PE provider data-aborted)
+      - name: patch kernel HID start (IOResources provider, not the PE)
         continue-on-error: true
         run: python3 ci/patch-kernel-hid-start.py hakios/xnu-src/xnu-8796.121.2
 
