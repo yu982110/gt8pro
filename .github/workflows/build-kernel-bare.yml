@@ -328,6 +328,15 @@ jobs:
       - name: patch kernel display probe (who opens the framebuffer, who presents a frame)
         continue-on-error: true
         run: python3 ci/patch-kernel-display-probe.py hakios/xnu-src/xnu-8796.121.2 2>&1 | tail -10
+      - name: dump SweetFramebuffer for the logical-size fix (reference)
+        continue-on-error: true
+        run: |
+          F=hakios/xnu-src/xnu-8796.121.2/iokit/Kernel/arm/SweetFramebuffer.cpp
+          echo "=== file: $F ==="
+          grep -n -E 'fLogical|fWidth|fHeight|SWEET_FB_LOGICAL|sweetfb_native|panel %u|dot_pitch|DOT_PITCH' "$F" | head -60
+          echo "=== AppleCLCD::start head ==="
+          sed -n '/AppleCLCD::start/,/registerService/p' "$F" | head -50
+
       - name: patch kernel MiniIOSurface weak (the display build drops MiniIOSurface.cpp)
         run: python3 ci/patch-kernel-miniiosurface-weak.py hakios/xnu-src/xnu-8796.121.2
 
