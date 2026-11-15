@@ -256,6 +256,10 @@ jobs:
         continue-on-error: true
         run: python3 ci/patch-kernel-nologd.py hakios/xnu-src/xnu-8796.121.2
 
+      - name: patch kernel workq probe (which workq_kernreturn operation the freeze is in)
+        continue-on-error: true
+        run: python3 ci/patch-kernel-workq-probe.py hakios/xnu-src/xnu-8796.121.2
+
       - name: patch kernel ticker (a heartbeat that does not use the console)
         run: python3 ci/patch-kernel-ticker.py hakios/xnu-src/xnu-8796.121.2
 
