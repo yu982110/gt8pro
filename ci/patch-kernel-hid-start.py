@@ -57,8 +57,10 @@ sweet_hid_start(IOService *provider)
 }
 '''.replace("%MARK%", MARK)
 
-CALLS = ("    /* " + MARK + ": backboardd needs the HID objects to exist */\n"
-         "    sweet_hid_start(this);\n")
+CALLS = ("    /* " + MARK + ": backboardd needs the HID objects to exist.  They attach to\n"
+         "     * IOResources (their personalities say so), not to the platform expert: passing\n"
+         "     * the PE as the provider is what data-aborted the first attempt. */\n"
+         "    sweet_hid_start(IOService::getResourceService());\n")
 
 DECL = ("\n/* " + MARK + " */\n"
         "extern \"C\" void sweet_hid_start(IOService *provider);\n")
@@ -94,7 +96,7 @@ def main():
         print("patch-hidstart: MISS GenericARMPE.cpp")
         return 1
     text = gpe.read_text(encoding="utf-8", errors="replace")
-    if "sweet_hid_start(this)" in text:
+    if "sweet_hid_start(IOService::getResourceService())" in text:
         print("patch-hidstart: GenericARMPE.cpp already calls sweet_hid_start()")
     elif ANCHOR_CALLS in text:
         text = text.replace(ANCHOR_CALLS, ANCHOR_CALLS + CALLS, 1)
