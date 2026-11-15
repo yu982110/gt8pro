@@ -53,6 +53,38 @@ BLOCK = (
 DECL = "extern void loader_log_line(const char *line);   /* " + MARK + " */\n"
 
 
+
+# The daemons are not execve()'d by launchd -- xpcproxy posix_spawn()s them, so the
+# execve hook alone never sees logd.  Hook the spawn path as well.
+PSPAWN_ANCHOR = (
+    "int\n"
+    "posix_spawn(proc_t ap, struct posix_spawn_args *uap, int32_t *retval)\n"
+    "{\n"
+)
+PSPAWN_BLOCK = (
+    "\t/* " + MARK + ": same refusal on the posix_spawn path xpcproxy uses. */\n"
+    "\t{\n"
+    "\t\tchar lafa_nop[160];\n"
+    "\t\tsize_t lafa_nopn = 0;\n"
+    "\n"
+    "\t\tif (copyinstr(uap->path, lafa_nop, sizeof(lafa_nop), &lafa_nopn) == 0) {\n"
+    "\t\t\tchar *lafa_base = lafa_nop;\n"
+    "\t\t\tchar *lafa_c;\n"
+    "\n"
+    "\t\t\tfor (lafa_c = lafa_nop; *lafa_c != '\\0'; lafa_c++) {\n"
+    "\t\t\t\tif (*lafa_c == '/') {\n"
+    "\t\t\t\t\tlafa_base = lafa_c + 1;\n"
+    "\t\t\t\t}\n"
+    "\t\t\t}\n"
+    "\t\t\tif (strcmp(lafa_base, \"logd\") == 0 ||\n"
+    "\t\t\t    strcmp(lafa_base, \"logd_helper\") == 0) {\n"
+    "\t\t\t\tloader_log_line(\"HAKIOS-NOLOGD: logd spawn refused\\n\");\n"
+    "\t\t\t\treturn ENOENT;\n"
+    "\t\t\t}\n"
+    "\t\t}\n"
+    "\t}\n"
+)
+
 def main():
     if len(sys.argv) < 2:
         print("usage: patch-kernel-nologd.py <xnu tree>")
@@ -70,6 +102,11 @@ def main():
         print("patch-nologd: MISS the __mac_execve signature")
         return 1
     text = text.replace(ANCHOR, ANCHOR + BLOCK, 1)
+    if PSPAWN_ANCHOR in text:
+        text = text.replace(PSPAWN_ANCHOR, PSPAWN_ANCHOR + PSPAWN_BLOCK, 1)
+        print("patch-nologd: posix_spawn also refuses logd")
+    else:
+        print("patch-nologd: MISS the posix_spawn signature")
     if DECL not in text:
         i = text.find("#include")
         j = text.find("\n", i)
