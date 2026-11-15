@@ -107,6 +107,14 @@ SweetCPU::start(IOService *provider)
 	info.cpu_id = reinterpret_cast<cpu_id_t>(this);
 	info.phys_id = cpu->phys_id;
 	info.log_id = cpu->cpu_id;
+	{
+		char lafa_ring[128];
+		snprintf(lafa_ring, sizeof(lafa_ring),
+		    "SWEET CPU: reg cpu_id=%u phys=0x%x num_cpus=%u boot=%u\n",
+		    cpu->cpu_id, cpu->phys_id, topology->num_cpus,
+		    topology->boot_cpu ? topology->boot_cpu->cpu_id : 99);
+		loader_log_line(lafa_ring);
+	}
 	info.cluster_id = cpu->cluster_id;
 	info.cluster_type = cpu->cluster_type;
 	info.l2_cache_id = cpu->l2_cache_id;
