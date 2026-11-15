@@ -17,7 +17,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            build-essential clang lld llvm make git python3 perl flex bison m4 \
+            build-essential clang lld llvm make git python3 perl flex bison m4 ccache \
             autoconf automake libtool pkg-config libssl-dev zlib1g-dev libxml2-dev \
             libncurses-dev 7zip lz4 unzip curl xz-utils rsync file
 
@@ -66,6 +66,28 @@ jobs:
           path: ~/theos
           key: theos-linux-${{ hashFiles('lafa/configs/lafa.config') }}
           restore-keys: theos-linux-
+
+
+      - name: ccache (the object tree cannot be cached; this can)
+        uses: actions/cache@v4
+        with:
+          path: ~/.ccache
+          key: ccache-${{ github.run_id }}
+          restore-keys: |
+            ccache-
+      - name: point clang at ccache
+        run: |
+          set -e
+          sudo mkdir -p /usr/local/bin
+          for c in clang clang++; do
+            real=$(command -v $c)
+            printf '#!/bin/sh\nexec ccache %s "$@"\n' "$real" | sudo tee /usr/local/bin/$c >/dev/null
+            sudo chmod 755 /usr/local/bin/$c
+            echo "$c -> ccache $real"
+          done
+          echo /usr/local/bin >> "$GITHUB_PATH"
+          ccache --version | head -1
+          ccache -M 2G
 
 
       - name: kernel tree (xnu/apply.sh)
