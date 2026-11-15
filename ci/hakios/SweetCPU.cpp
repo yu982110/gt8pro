@@ -36,6 +36,15 @@ class SweetCPU;
 static SweetCPU *sweet_cpus[MAX_CPUS];
 static uint32_t sweet_cpus_registered;
 
+/* HAKIOS-LAFA-CPU: the reference reads this from the CPU's GIC redistributor; during
+ * bring-up the startup path is gated on initCPU()'s own publication instead. */
+extern "C" boolean_t
+sweet_cpu_signal_is_enabled(unsigned int cpu)
+{
+	(void)cpu;
+	return TRUE;
+}
+
 /* SMCCC 1.0: x0 is the signed PSCI result; do not assume x1-x17 survive. */
 static int32_t
 sweet_psci_cpu_on(uint64_t target, uint64_t entry, uint64_t context)
