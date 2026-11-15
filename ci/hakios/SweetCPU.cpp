@@ -5,6 +5,15 @@
  */
 #include <pexpert/arm64/board_config.h>
 
+/* HAKIOS-LAFA-CPU: these two live in the SWEET board header; the lafa board header has
+ * no equivalents, so use the values the reference port uses for this SoC. */
+#ifndef SWEET_SMP_MAX_CPUS
+#define SWEET_SMP_MAX_CPUS         8
+#endif
+#ifndef SWEET_IPI_SGI
+#define SWEET_IPI_SGI              1
+#endif
+
 #if defined(SWEET) || 1 /* HAKIOS-LAFA-CPU: build on lafa too, not just SWEET */
 #include <IOKit/IOCPU.h>
 #include <IOKit/IOLib.h>
