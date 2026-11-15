@@ -21,10 +21,16 @@ ANCHOR = (
 )
 PROBE = (
     MARK + "\n"
-    "\tif (error != 0 && proc->p_comm[0] == 'x' &&\n"
-    "\t    strncmp(proc->p_comm, \"xpcproxy\", sizeof(\"xpcproxy\") - 1) == 0) {\n"
+    "\tif (error != 0 &&\n"
+    "\t    ((proc->p_comm[0] == 'x' &&\n"
+    "\t      strncmp(proc->p_comm, \"xpcproxy\", sizeof(\"xpcproxy\") - 1) == 0) ||\n"
+    "\t     (proc->p_comm[0] == 'b' &&\n"
+    "\t      strncmp(proc->p_comm, \"backboardd\", sizeof(\"backboardd\") - 1) == 0) ||\n"
+    "\t     (proc->p_comm[0] == 'S' &&\n"
+    "\t      strncmp(proc->p_comm, \"SpringBoard\", sizeof(\"SpringBoard\") - 1) == 0))) {\n"
     "\t\tchar lafa_ret[96];\n"
-    "\t\tsnprintf(lafa_ret, sizeof(lafa_ret), \"HAKIOS-RET: code %d err %d\\n\", code, error);\n"
+    "\t\tsnprintf(lafa_ret, sizeof(lafa_ret), \"HAKIOS-RET: %s code %d err %d\\n\",\n"
+    "\t\t    proc->p_comm, code, error);\n"
     "\t\tloader_log_line(lafa_ret);\n"
     "\t}\n"
 )
