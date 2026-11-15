@@ -67,14 +67,6 @@ jobs:
           key: theos-linux-${{ hashFiles('lafa/configs/lafa.config') }}
           restore-keys: theos-linux-
 
-      - name: cache the kernel object tree (incremental builds)
-        uses: actions/cache@v4
-        with:
-          path: hakios/xnu-src/xnu-8796.121.2/BUILD
-          key: xnu-build-${{ hashFiles('lafa/configs/lafa.config') }}-${{ github.run_id }}
-          restore-keys: |
-            xnu-build-${{ hashFiles('lafa/configs/lafa.config') }}-
-            xnu-build-
 
       - name: kernel tree (xnu/apply.sh)
         run: |
