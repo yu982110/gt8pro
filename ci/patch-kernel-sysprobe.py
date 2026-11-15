@@ -34,7 +34,7 @@ NEW = (
     "\t     strncmp(proc->p_comm, \"SpringBoard\", sizeof(\"SpringBoard\") - 1) == 0)) {\n"
     "\t\tchar lafa_line[96];\n"
     "\n"
-    "\t\tsnprintf(lafa_line, sizeof(lafa_line), \"HAKIOS-SYS %d %s\\n\", (int)code,\n"
+    "\t\tsnprintf(lafa_line, sizeof(lafa_line), \"HAKIOS-SYS %s %d %s\\n\", proc->p_comm, (int)code,\n"
     "\t\t    (syscode < nsysent) ? syscallnames[syscode] : \"?\");\n"
     "\t\tloader_log_line(lafa_line);\n"
     "\n"
