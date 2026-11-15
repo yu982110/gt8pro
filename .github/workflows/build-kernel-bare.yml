@@ -259,9 +259,9 @@ jobs:
       - name: patch kernel vcnoop (the video console draws nothing, so console writes return)
         run: python3 ci/patch-kernel-vcnoop.py hakios/xnu-src/xnu-8796.121.2
 
-      # - name: patch kernel sysprobe (name the syscall a process is inside when it stops)   [disabled for the probe-vs-kernel experiment]
-        # (sysprobe step disabled)
+      - name: patch kernel sysprobe (name the syscall a process stops in)
 #
+        run: python3 ci/patch-kernel-sysprobe.py hakios/xnu-src/xnu-8796.121.2
       - name: patch kernel exec probe (which posix_spawn EPERM site)
         continue-on-error: true
         run: python3 ci/patch-kernel-execprobe.py hakios/xnu-src/xnu-8796.121.2
@@ -294,9 +294,8 @@ jobs:
         continue-on-error: true
         run: python3 ci/patch-kernel-openres.py hakios/xnu-src/xnu-8796.121.2
 
-      # - name: patch kernel sysprobe2 (bracket MACF, audit and the handler)   [disabled for the probe-vs-kernel experiment]
-        # (sysprobe step disabled)
 #
+        run: python3 ci/patch-kernel-sysprobe.py hakios/xnu-src/xnu-8796.121.2
       - name: remove the GPU sources from the build before the display patch
         run: |
           root=hakios/xnu-src/xnu-8796.121.2
