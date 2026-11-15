@@ -16,6 +16,7 @@ boot log says exactly how far it got.
     python3 ci/patch-kernel-hid-start.py <xnu source tree>
 """
 import pathlib
+import re
 import sys
 
 MARK = "HAKIOS-LAFA-HID-START"
@@ -98,7 +99,17 @@ def main():
     elif ANCHOR_CALLS in text:
         text = text.replace(ANCHOR_CALLS, ANCHOR_CALLS + CALLS, 1)
         if "sweet_hid_start(IOService" not in text:
-            text = text.replace("#include", DECL + "\n#include", 1)
+            # Put the declaration right after the display one: that spot is already past
+            # the includes, so IOService is a known type there.  The call block itself is
+            # inside a function, so the declaration must not go there.
+            anchor = 'extern "C" void sweet_surface_start(IOService *provider);\n'
+            i = text.find(anchor)
+            if i >= 0:
+                at = i + len(anchor)
+                text = text[:at] + DECL + text[at:]
+            else:
+                print("patch-hidstart: no display declaration to anchor beside")
+                return 1
         gpe.write_text(text, encoding="utf-8")
         print("patch-hidstart: GenericARMPE.cpp calls sweet_hid_start()")
     else:
