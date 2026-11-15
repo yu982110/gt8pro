@@ -178,9 +178,9 @@ sweet_boot_thread(void *arg __unused, wait_result_t result __unused)
 			}
 	{
 		char lafa_ring[96];
-		snprintf(lafa_ring, sizeof(lafa_ring), "SWEET CPU: registration timeout (%u/%u)
-",
-			    __atomic_load_n(&sweet_cpus_registered, __ATOMIC_ACQUIRE), topology->num_cpus);
+		snprintf(lafa_ring, sizeof(lafa_ring),
+		    "SWEET CPU: registration timeout (%u/%u)\n",
+		    __atomic_load_n(&sweet_cpus_registered, __ATOMIC_ACQUIRE), topology->num_cpus);
 		loader_log_line(lafa_ring);
 	}
 			return;
@@ -312,8 +312,8 @@ SweetCPU::startCPU(vm_offset_t start_paddr, vm_offset_t arg_paddr)
 			snprintf(lafa_ring, sizeof(lafa_ring), "SWEET CPU: cpu=%u NOT alive: PSCI CPU_ON rc=%d\n", getCPUNumber(), rc);
 			loader_log_line(lafa_ring);
 		}
-		continue;
-
+		/* HAKIOS-LAFA-CPU: report, do not take the whole boot down. */
+		return KERN_FAILURE;
 	}
 	return KERN_SUCCESS;
 }
