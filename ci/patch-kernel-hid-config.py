@@ -4,19 +4,22 @@
 0058-sweet-hid-event-services.patch ships the whole HID stack, but its two integration
 hunks fail on our tree (both files were already touched by the display patches), and
 `patch --forward` leaves the rest applied.  Without them the new .cpp files are never
-compiled and the kernel has no HID family, so backboardd has nothing to serve.
+compiled, the config table never matches them, and the kernel has no HID family -- so
+backboardd has nothing to serve and SpringBoard waits forever.
 
-This script re-applies exactly those two edits:
-  1. iokit/conf/files.arm64      -- add the four hid sources
-  2. iokit/KernelConfigTables.cpp -- add SweetHIDButtons / SweetHIDTouch personalities
+This script re-applies exactly those two edits the way the display patch does it:
+  1. iokit/conf/files.arm64       -- append the four hid sources
+  2. iokit/KernelConfigTables.cpp -- add SweetHIDButtons / SweetHIDTouch before the
+                                     closing `)";` of gIOKernelConfigTables
 
-Idempotent; exits 0 when already applied or when the anchors changed.
+Idempotent; exits 0 when already applied, 1 when a target cannot be patched.
 """
 import pathlib
+import re
 import sys
 
-FILES_MARK = "iokit/Kernel/arm/hid/SweetHID.cpp"
-FILES_TAIL = "iokit/Kernel/arm/SweetFramebuffer.cpp"
+MARK = "HAKIOS-LAFA-HIDCFG"
+
 FILES_ADD = (
     "iokit/Kernel/arm/hid/SweetHID.cpp                                optional iokitcpp\n"
     "iokit/Kernel/arm/hid/IOHIDEvent.cpp                              optional iokitcpp\n"
@@ -24,22 +27,21 @@ FILES_ADD = (
     "iokit/Kernel/arm/hid/IOHIDEventServiceUserClient.cpp             optional iokitcpp\n"
 )
 
-TBL_MARK = "SweetHIDButtons"
-TBL_ANCHOR = (
-    "    \"     'IONameMatch'     = 'sweet,display';\"\n"
-    "    \"   },\"\n"
-)
-TBL_ADD = (
-    "    \"   {\"\n"
+TABLE_BLOCK = (
+    "#if defined(__arm64__)\n"
+    "    /* " + MARK + ": the HID event services (iokit/Kernel/arm/hid/SweetHID.cpp).\n"
+    "     * backboardd serves HID; without this family it initialises and waits forever. */\n"
+    '    "   ,{"\n'
     "    \"     'IOClass'         = SweetHIDButtons;\"\n"
     "    \"     'IOProviderClass' = IOResources;\"\n"
     "    \"     'IOMatchCategory' = SweetHIDButtons;\"\n"
-    "    \"   },\"\n"
-    "    \"   {\"\n"
+    '    "   }"\n'
+    '    "   ,{"\n'
     "    \"     'IOClass'         = SweetHIDTouch;\"\n"
     "    \"     'IOProviderClass' = IOResources;\"\n"
     "    \"     'IOMatchCategory' = SweetHIDTouch;\"\n"
-    "    \"   },\"\n"
+    '    "   }"\n'
+    "#endif\n"
 )
 
 
@@ -48,39 +50,43 @@ def main():
         print("usage: patch-kernel-hid-config.py <xnu tree>")
         return 2
     root = pathlib.Path(sys.argv[1])
-    hits = 0
+    ok = 0
 
     f = root / "iokit/conf/files.arm64"
     if f.exists():
         text = f.read_text(encoding="utf-8", errors="replace")
-        if FILES_MARK in text:
-            print("patch-hidcfg: files.arm64 already has the hid sources")
-            hits += 1
-        elif FILES_TAIL in text:
-            idx = text.find(FILES_TAIL)
-            eol = text.find("\n", idx) + 1
-            text = text[:eol] + FILES_ADD + text[eol:]
-            f.write_text(text, encoding="utf-8")
-            print("patch-hidcfg: hid sources added to files.arm64")
-            hits += 1
+        if "iokit/Kernel/arm/hid/SweetHID.cpp" in text:
+            print("patch-hidcfg: files.arm64 already lists the hid sources")
         else:
-            print("patch-hidcfg: MISS anchor in iokit/conf/files.arm64")
+            if not text.endswith("\n"):
+                text += "\n"
+            text += FILES_ADD
+            f.write_text(text, encoding="utf-8")
+            print("patch-hidcfg: four hid sources appended to files.arm64")
+        ok += 1
+    else:
+        print("patch-hidcfg: MISS iokit/conf/files.arm64")
 
     c = root / "iokit/KernelConfigTables.cpp"
     if c.exists():
         text = c.read_text(encoding="utf-8", errors="replace")
-        if TBL_MARK in text:
+        if MARK in text:
             print("patch-hidcfg: KernelConfigTables already has the hid personalities")
-            hits += 1
-        elif TBL_ANCHOR in text:
-            text = text.replace(TBL_ANCHOR, TBL_ANCHOR + TBL_ADD, 1)
-            c.write_text(text, encoding="utf-8")
-            print("patch-hidcfg: hid personalities added to KernelConfigTables.cpp")
-            hits += 1
+            ok += 1
         else:
-            print("patch-hidcfg: MISS anchor in iokit/KernelConfigTables.cpp")
+            matches = list(re.finditer(r'^[ \t]*"\)";[ \t]*$', text, re.MULTILINE))
+            if not matches:
+                print('patch-hidcfg: MISS the closing ")"; in KernelConfigTables.cpp')
+            else:
+                at = matches[-1].start()
+                text = text[:at] + TABLE_BLOCK + text[at:]
+                c.write_text(text, encoding="utf-8")
+                print("patch-hidcfg: SweetHIDButtons/SweetHIDTouch added to gIOKernelConfigTables")
+                ok += 1
+    else:
+        print("patch-hidcfg: MISS iokit/KernelConfigTables.cpp")
 
-    return 0 if hits >= 2 else 1
+    return 0 if ok == 2 else 1
 
 
 if __name__ == "__main__":
