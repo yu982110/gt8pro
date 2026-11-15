@@ -130,6 +130,10 @@ jobs:
         continue-on-error: true
         run: python3 ci/patch-kernel-smp-caches.py hakios/xnu-src/xnu-8796.121.2
 
+      - name: patch kernel topology probe (why ml_processor_register fails)
+        continue-on-error: true
+        run: python3 ci/patch-kernel-smp-topo.py hakios/xnu-src/xnu-8796.121.2
+
       - name: patch kernel native cs hash
         run: python3 ci/patch-kernel-native-cs-hash.py hakios/xnu-src/xnu-8796.121.2
 
