@@ -96,11 +96,11 @@ def main():
         print("patch-hidstart: MISS GenericARMPE.cpp")
         return 1
     text = gpe.read_text(encoding="utf-8", errors="replace")
-    if "sweet_hid_start(IOService::getResourceService())" in text:
+    if 'extern "C" void sweet_hid_start(IOService *provider);' in text:
         print("patch-hidstart: GenericARMPE.cpp already calls sweet_hid_start()")
     elif ANCHOR_CALLS in text:
         text = text.replace(ANCHOR_CALLS, ANCHOR_CALLS + CALLS, 1)
-        if "sweet_hid_start(IOService" not in text:
+        if 'extern "C" void sweet_hid_start(IOService *provider);' not in text:
             # Put the declaration right after the display one: that spot is already past
             # the includes, so IOService is a known type there.  The call block itself is
             # inside a function, so the declaration must not go there.
