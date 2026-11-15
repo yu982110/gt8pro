@@ -53,9 +53,12 @@ sweet_psci_cpu_on(uint64_t target, uint64_t entry, uint64_t context)
 class SweetCPU : public IOCPU {
 	OSDeclareDefaultStructors(SweetCPU);
 	const OSSymbol *cpuName = NULL;
-	uint32_t initialized = 0; /* release/acquire publication after initCPU sends SGI */
 
 public:
+	uint32_t initialized = 0; /* release/acquire publication after initCPU sends SGI */
+	/* HAKIOS-LAFA-CPU: the startup thread is a free function, so the members it
+	 * touches are public and machProcessor comes through an accessor. */
+	processor_t getMachProcessor() { return machProcessor; }
 	bool start(IOService *provider) APPLE_KEXT_OVERRIDE;
 	void free(void) APPLE_KEXT_OVERRIDE;
 	void initCPU(bool boot) APPLE_KEXT_OVERRIDE;
@@ -160,7 +163,7 @@ sweet_boot_thread(void *arg __unused, wait_result_t result __unused)
 	}
 	for (unsigned int i = 0; i < topology->num_cpus; i++) {
 		SweetCPU *cpu = __atomic_load_n(&sweet_cpus[i], __ATOMIC_ACQUIRE);
-		kern_return_t kr = processor_start(cpu->machProcessor);
+		kern_return_t kr = processor_start(cpu->getMachProcessor());
 		if (kr != KERN_SUCCESS) {
 			panic("SWEET CPU: cpu=%u processor_start failed: %d", i, kr);
 		}
