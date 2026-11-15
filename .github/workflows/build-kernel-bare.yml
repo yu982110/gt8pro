@@ -241,6 +241,10 @@ jobs:
         continue-on-error: true
         run: python3 ci/patch-kernel-openok.py hakios/xnu-src/xnu-8796.121.2
 
+      - name: patch kernel open result (did backboardd's opens succeed)
+        continue-on-error: true
+        run: python3 ci/patch-kernel-openres.py hakios/xnu-src/xnu-8796.121.2
+
       - name: patch kernel sysprobe2 (bracket MACF, audit and the handler)
         run: python3 ci/patch-kernel-sysprobe2.py hakios/xnu-src/xnu-8796.121.2
 
