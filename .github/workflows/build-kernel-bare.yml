@@ -279,7 +279,9 @@ jobs:
       - name: patch kernel display start (the config table is not probed here, so start the services by hand)
         continue-on-error: true
         run: python3 ci/patch-kernel-display-start.py hakios/xnu-src/xnu-8796.121.2 2>&1 | tail -10
-      # HID start is disabled: SweetHID*::start(this) data-aborts on the PE provider
+      - name: patch kernel HID start (IOResources provider; the PE provider data-aborted)
+        continue-on-error: true
+        run: python3 ci/patch-kernel-hid-start.py hakios/xnu-src/xnu-8796.121.2
 
       - name: patch kernel display probe (who opens the framebuffer, who presents a frame)
         continue-on-error: true
