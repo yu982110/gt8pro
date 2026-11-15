@@ -30,6 +30,8 @@
 extern "C" void sweet_secondary_entry(void);
 extern "C" boolean_t sweet_cpu_signal_is_enabled(unsigned int cpu);
 
+/* HAKIOS-LAFA-CPU: the startup thread, declared at file scope so the member below can see it. */
+void sweet_boot_thread(void *arg, wait_result_t result);
 class SweetCPU;
 static SweetCPU *sweet_cpus[MAX_CPUS];
 static uint32_t sweet_cpus_registered;
@@ -54,7 +56,6 @@ class SweetCPU : public IOCPU {
 	uint32_t initialized = 0; /* release/acquire publication after initCPU sends SGI */
 
 public:
-	friend void sweet_boot_thread(void *arg, wait_result_t result);
 	bool start(IOService *provider) APPLE_KEXT_OVERRIDE;
 	void free(void) APPLE_KEXT_OVERRIDE;
 	void initCPU(bool boot) APPLE_KEXT_OVERRIDE;
