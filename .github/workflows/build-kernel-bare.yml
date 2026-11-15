@@ -269,6 +269,10 @@ jobs:
         continue-on-error: true
         run: python3 ci/patch-kernel-hid-config.py hakios/xnu-src/xnu-8796.121.2
 
+      - name: patch kernel HID start (the config table personalities are not probed)
+        continue-on-error: true
+        run: python3 ci/patch-kernel-hid-start.py hakios/xnu-src/xnu-8796.121.2
+
       - name: patch kernel DPU scanout
         continue-on-error: true
         run: python3 ci/patch-kernel-dpu.py hakios/xnu-src/xnu-8796.121.2 2>&1 | tail -25
