@@ -28,6 +28,8 @@
 #include <pexpert/pexpert.h>
 
 extern "C" void sweet_secondary_entry(void);
+extern "C" void loader_log_line(const char *line);
+
 extern "C" boolean_t sweet_cpu_signal_is_enabled(unsigned int cpu);
 
 /* HAKIOS-LAFA-CPU: the startup thread, declared at file scope so the member below can see it. */
@@ -123,7 +125,13 @@ SweetCPU::start(IOService *provider)
 	perfmon_interrupt_handler_func pmi_handler = NULL;
 	kern_return_t result = ml_processor_register(&info, &machProcessor, &ipi_handler, &pmi_handler);
 	if (result != KERN_SUCCESS) {
-		panic("SWEET CPU: ml_processor_register failed: %d", result);
+		{
+			char lafa_ring[96];
+			snprintf(lafa_ring, sizeof(lafa_ring), "SWEET CPU: ml_processor_register failed: %d\n", result);
+			loader_log_line(lafa_ring);
+		}
+		return false;
+
 	}
 	if (pmi_handler != NULL) {
 		panic("SWEET CPU: PMI routing is not implemented");
@@ -136,7 +144,13 @@ SweetCPU::start(IOService *provider)
 		thread_t thread;
 		result = kernel_thread_start(&sweet_boot_thread, NULL, &thread);
 		if (result != KERN_SUCCESS) {
-			panic("SWEET CPU: cannot create startup thread: %d", result);
+			{
+				char lafa_ring[96];
+				snprintf(lafa_ring, sizeof(lafa_ring), "SWEET CPU: cannot create startup thread: %d\n", result);
+				loader_log_line(lafa_ring);
+			}
+			return false;
+
 		}
 		thread_deallocate(thread);
 	}
@@ -162,19 +176,38 @@ sweet_boot_thread(void *arg __unused, wait_result_t result __unused)
 					IOLog("SWEET CPU: cpu=%u NOT registered (IOKit matching timeout)\n", i);
 				}
 			}
-			panic("SWEET CPU: CPU registration timeout");
+	{
+		char lafa_ring[96];
+		snprintf(lafa_ring, sizeof(lafa_ring), "SWEET CPU: registration timeout (%u/%u)
+",
+			    __atomic_load_n(&sweet_cpus_registered, __ATOMIC_ACQUIRE), topology->num_cpus);
+		loader_log_line(lafa_ring);
+	}
+			return;
 		}
 		IOSleep(1);
 	}
 	/* The supplied ADT has cpu0 as the boot CPU and ascending A55 nodes. */
+	/* HAKIOS-LAFA-CPU: this port boots on MPIDR 0x200 (bootcpu=2), not 0; record it
+	 * instead of panicking. */
 	if (topology->boot_cpu->cpu_id != 0 || topology->boot_cpu->phys_id != 0) {
-		panic("SWEET CPU: expected boot MPIDR 0 and logical CPU 0");
+	{
+		char lafa_ring[96];
+		snprintf(lafa_ring, sizeof(lafa_ring), "SWEET CPU: boot cpu_id=%u phys_id=0x%x\n",
+		    topology->boot_cpu->cpu_id, topology->boot_cpu->phys_id);
+		loader_log_line(lafa_ring);
+	}
 	}
 	for (unsigned int i = 0; i < topology->num_cpus; i++) {
 		SweetCPU *cpu = __atomic_load_n(&sweet_cpus[i], __ATOMIC_ACQUIRE);
 		kern_return_t kr = processor_start(cpu->getMachProcessor());
 		if (kr != KERN_SUCCESS) {
-			panic("SWEET CPU: cpu=%u processor_start failed: %d", i, kr);
+	{
+		char lafa_ring[96];
+		snprintf(lafa_ring, sizeof(lafa_ring), "SWEET CPU: cpu=%u processor_start failed: %d\n", i, kr);
+		loader_log_line(lafa_ring);
+	}
+			continue;
 		}
 		/* processor_start() is asynchronous for secondaries in this XNU. */
 		nanoseconds_to_deadline(5 * NSEC_PER_SEC, &deadline);
@@ -183,7 +216,13 @@ sweet_boot_thread(void *arg __unused, wait_result_t result __unused)
 			if (mach_absolute_time() > deadline) {
 				IOLog("SWEET CPU: cpu=%u mpidr=0x%x NOT alive after 5s\n",
 				    i, topology->cpus[i].phys_id);
-				panic("SWEET CPU: cpu=%u startup timeout (reset/MMU/GIC/SGI)", i);
+				{
+					char lafa_ring[96];
+					snprintf(lafa_ring, sizeof(lafa_ring), "SWEET CPU: cpu=%u startup timeout (reset/MMU/GIC/SGI)\n", i);
+					loader_log_line(lafa_ring);
+				}
+				continue;
+
 			}
 			IOSleep(1);
 		}
@@ -268,7 +307,13 @@ SweetCPU::startCPU(vm_offset_t start_paddr, vm_offset_t arg_paddr)
 	IOLog("SWEET CPU: cpu=%u PSCI CPU_ON rc=%d\n", getCPUNumber(), rc);
 	/* cpu_start() discards PE_cpu_start's return; do not silently carry on. */
 	if (rc != 0) {
-		panic("SWEET CPU: cpu=%u NOT alive: PSCI CPU_ON rc=%d", getCPUNumber(), rc);
+		{
+			char lafa_ring[96];
+			snprintf(lafa_ring, sizeof(lafa_ring), "SWEET CPU: cpu=%u NOT alive: PSCI CPU_ON rc=%d\n", getCPUNumber(), rc);
+			loader_log_line(lafa_ring);
+		}
+		continue;
+
 	}
 	return KERN_SUCCESS;
 }
