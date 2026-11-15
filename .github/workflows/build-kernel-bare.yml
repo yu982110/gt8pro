@@ -118,6 +118,10 @@ jobs:
         continue-on-error: true
         run: python3 ci/patch-kernel-smp-aff2.py hakios/xnu-src/xnu-8796.121.2
 
+      - name: patch kernel SweetCPU (IOCPU + PSCI CPU_ON, from the reference)
+        continue-on-error: true
+        run: python3 ci/patch-kernel-sweetcpu.py hakios/xnu-src/xnu-8796.121.2
+
       - name: patch kernel native cs hash
         run: python3 ci/patch-kernel-native-cs-hash.py hakios/xnu-src/xnu-8796.121.2
 
