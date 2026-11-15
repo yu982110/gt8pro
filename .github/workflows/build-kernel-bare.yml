@@ -114,6 +114,10 @@ jobs:
       - name: patch kernel 4K pages
         run: python3 ci/patch-kernel-4k-pages.py hakios/xnu-src/xnu-8796.121.2
 
+      - name: patch kernel pthread layout (match libpthread-514: 56 bytes)
+        continue-on-error: true
+        run: python3 ci/patch-kernel-pthread-layout.py hakios/xnu-src/xnu-8796.121.2
+
       - name: patch kernel SMP (all eight cores, Aff2 masks)
         continue-on-error: true
         run: python3 ci/patch-kernel-smp-aff2.py hakios/xnu-src/xnu-8796.121.2
