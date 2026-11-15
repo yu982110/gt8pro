@@ -122,6 +122,10 @@ jobs:
         continue-on-error: true
         run: python3 ci/patch-kernel-sweetcpu.py hakios/xnu-src/xnu-8796.121.2
 
+      - name: patch kernel CPU entry (PSCI secondary entry in start.s)
+        continue-on-error: true
+        run: python3 ci/patch-kernel-cpu-entry.py hakios/xnu-src/xnu-8796.121.2
+
       - name: patch kernel native cs hash
         run: python3 ci/patch-kernel-native-cs-hash.py hakios/xnu-src/xnu-8796.121.2
 
