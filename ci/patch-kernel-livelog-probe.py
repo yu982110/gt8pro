@@ -80,6 +80,15 @@ ANCHORS = [
     (KSTARTUP, "\tsfi_init();\n", probe("AF sfi_init returned"), "after"),
     (KSTARTUP, "\tidle_thread_create(processor);\n", probe("AG idle_thread_create returned"), "after"),
     (KSTARTUP, "\tsched_startup();\n", probe("AH sched_startup returned"), "after"),
+    # how many CPUs the scheduler was actually given: a one-CPU kernel deadlocks any
+    # two-thread handshake, which is the shape of the backboardd stall.
+    (KSTARTUP, "\tsched_startup();\n",
+     "\t{\n"
+     "\t\tchar lafa_cpu[96];\n"
+     "\t\tsnprintf(lafa_cpu, sizeof(lafa_cpu), \"HAKIOS-CPU: logical_cpu_max %u\\n\",\n"
+     "\t\t    (unsigned int)machine_info.logical_cpu_max);\n"
+     "\t\tloader_log_line(lafa_cpu);\n"
+     "\t}\n", "after"),
     (KSTARTUP, "\tthread_daemon_init();\n", probe("AI thread_daemon_init returned"), "after"),
     (KSTARTUP, "\tthread_bind(processor);\n", probe("AJ thread_bind returned"), "after"),
     (KSTARTUP, "\tmapping_adjust();\n", probe("AK mapping_adjust returned"), "after"),
