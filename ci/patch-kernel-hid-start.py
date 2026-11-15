@@ -97,7 +97,7 @@ def main():
         print("patch-hidstart: GenericARMPE.cpp already calls sweet_hid_start()")
     elif ANCHOR_CALLS in text:
         text = text.replace(ANCHOR_CALLS, ANCHOR_CALLS + CALLS, 1)
-        if "sweet_surface_start(IOService" not in text:
+        if "sweet_hid_start(IOService" not in text:
             text = text.replace("#include", DECL + "\n#include", 1)
         gpe.write_text(text, encoding="utf-8")
         print("patch-hidstart: GenericARMPE.cpp calls sweet_hid_start()")
