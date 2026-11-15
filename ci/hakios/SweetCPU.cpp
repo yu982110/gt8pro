@@ -5,7 +5,7 @@
  */
 #include <pexpert/arm64/board_config.h>
 
-#if defined(SWEET)
+#if defined(SWEET) || 1 /* HAKIOS-LAFA-CPU: build on lafa too, not just SWEET */
 #include <IOKit/IOCPU.h>
 #include <IOKit/IOLib.h>
 #include <libkern/c++/OSData.h>
