@@ -54,7 +54,7 @@ class SweetCPU : public IOCPU {
 	uint32_t initialized = 0; /* release/acquire publication after initCPU sends SGI */
 
 public:
-	static void startAll(void *arg, wait_result_t result);
+	friend void sweet_boot_thread(void *arg, wait_result_t result);
 	bool start(IOService *provider) APPLE_KEXT_OVERRIDE;
 	void free(void) APPLE_KEXT_OVERRIDE;
 	void initCPU(bool boot) APPLE_KEXT_OVERRIDE;
@@ -121,7 +121,7 @@ SweetCPU::start(IOService *provider)
 	__atomic_add_fetch(&sweet_cpus_registered, 1, __ATOMIC_ACQ_REL);
 	if (cpu == topology->boot_cpu) {
 		thread_t thread;
-		result = kernel_thread_start(&SweetCPU::startAll, NULL, &thread);
+		result = kernel_thread_start(&sweet_boot_thread, NULL, &thread);
 		if (result != KERN_SUCCESS) {
 			panic("SWEET CPU: cannot create startup thread: %d", result);
 		}
@@ -132,7 +132,7 @@ SweetCPU::start(IOService *provider)
 
 /* Do not wait in a nub's start(): matching can be asynchronous or serialized. */
 void
-SweetCPU::startAll(void *arg __unused, wait_result_t result __unused)
+sweet_boot_thread(void *arg __unused, wait_result_t result __unused)
 {
 	const ml_topology_info_t *topology = ml_get_topology_info();
 	uint32_t requested = 1;
