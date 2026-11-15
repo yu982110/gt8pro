@@ -56,14 +56,25 @@ jobs:
           make lafa_defconfig
           make config
 
-      # Reuse the toolchain between runs.  The object tree is not cached: a restored BUILD from a
-      # different patch set made the 4K-pages step fail before anything was compiled.
+      # Reuse the toolchain and the kernel object tree between runs.  The object tree is
+      # restored with a fresh cache key each run and the patched sources get new mtimes, so
+      # make recompiles exactly what a patch changed.  (An earlier attempt failed because a
+      # BUILD was restored from a step that had not even reached the 4K-pages config.)
       - name: cache theos
         uses: actions/cache@v4
         with:
           path: ~/theos
           key: theos-linux-${{ hashFiles('lafa/configs/lafa.config') }}
           restore-keys: theos-linux-
+
+      - name: cache the kernel object tree (incremental builds)
+        uses: actions/cache@v4
+        with:
+          path: hakios/xnu-src/xnu-8796.121.2/BUILD
+          key: xnu-build-${{ hashFiles('lafa/configs/lafa.config') }}-${{ github.run_id }}
+          restore-keys: |
+            xnu-build-${{ hashFiles('lafa/configs/lafa.config') }}-
+            xnu-build-
 
       - name: kernel tree (xnu/apply.sh)
         run: |
@@ -284,8 +295,8 @@ jobs:
       - name: patch kernel MiniIOSurface weak (the display build drops MiniIOSurface.cpp)
         run: python3 ci/patch-kernel-miniiosurface-weak.py hakios/xnu-src/xnu-8796.121.2
 
-      - name: force a clean kernel object tree (patches must be recompiled)
-        run: rm -rf hakios/xnu-src/xnu-8796.121.2/BUILD
+      # the object tree is cached now: patched sources get fresh mtimes, so make
+      # rebuilds exactly the files the patches touched
 
       - name: build kernel
         run: |
