@@ -19,7 +19,7 @@ import pathlib
 import sys
 
 MARK = "HAKIOS-LAFA-TOPO"
-DECL = 'extern "C" void loader_log_line(const char *line);\n'
+DECL = 'extern void loader_log_line(const char *line);        /* C file: no extern "C" */\n'
 
 
 def block(fmt, args):
