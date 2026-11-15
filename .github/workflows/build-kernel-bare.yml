@@ -301,6 +301,23 @@ jobs:
           exit $rc
 
 
+      - name: symbolize host data (nm of the unstripped kernel, for panics)
+        if: always()
+        run: |
+          K=hakios/xnu-src/xnu-8796.121.2/BUILD/obj/DEVELOPMENT_ARM64_BCM2837/mach.development.bcm2837
+          if [ -f "$K" ]; then
+            (command -v llvm-nm >/dev/null && llvm-nm -n "$K" || nm -n "$K") > /tmp/lafa-nm.txt 2>/dev/null || true
+            wc -l /tmp/lafa-nm.txt
+            grep -m3 -E ' sweet_hid_start| _panic$' /tmp/lafa-nm.txt || true
+          fi
+      - name: upload kernel symbols
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lafa-kernel-symbols
+          path: /tmp/lafa-nm.txt
+          if-no-files-found: warn
+
       - name: upload artifacts
         if: always()
         uses: actions/upload-artifact@v4
