@@ -1,0 +1,17 @@
+name: runner check (which runner labels are available)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  linux:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: hello from linux
+        run: uname -a; nproc
+
+  macos:
+    runs-on: macos-14
+    steps:
+      - name: hello from macos
+        run: sw_vers; xcodebuild -version
