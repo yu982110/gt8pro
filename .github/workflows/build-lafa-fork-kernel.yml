@@ -96,7 +96,18 @@ jobs:
           MAKEFLAGS: ${{ inputs.keep_going == 'false' && '' || '-k' }}
           IIG: ${{ github.workspace }}/ref/tools/xnu-iig-cache.py
           XNU_IIG_CACHE: ${{ github.workspace }}/ref/xnu/iig-pregen
-        run: bash build.sh
+        run: |
+          set -o pipefail
+          bash build.sh 2>&1 | tee ../build-log.txt
+
+      - name: Upload the build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build-log.txt
+          if-no-files-found: warn
+          retention-days: 5
 
       - name: Collect the kernel
         if: always()
