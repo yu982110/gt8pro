@@ -102,29 +102,52 @@ jobs:
           ROOT_SIZE: ${{ inputs.root_size }}
         run: |
           set -e
-          # pick the three volumes by APFS volume name: the OS volume holds /System,
-          # the other two are the SystemOS and AppOS cryptexes.
+          # The 16.7.16 IPSW carries five dmgs at the top level.  They are told apart by what
+          # they mount as (the volumes are all named "root" in the container): the OS volume has
+          # /System/Library/CoreServices, the SystemOS volume has the shared dyld cache, the App
+          # volume has neither.  Sizes break ties when a check is inconclusive.
+          ls -la dmg
+          classify() {
+            local mount="$1"
+            if [ -e "$mount/root/System/Library/CoreServices/SpringBoard.app" ] || \
+               [ -e "$mount/root/System/Library/CoreServices/SystemVersion.plist" ]; then
+              echo os; return
+            fi
+            if [ -e "$mount/root/System/Library/Caches/com.apple.dyld" ] || \
+               [ -e "$mount/root/usr/lib/dyld" ]; then
+              echo sysos; return
+            fi
+            if [ -d "$mount/root" ]; then echo appos; return; fi
+            echo none
+          }
           os_dmg=""; sys_dmg=""; app_dmg=""
+          n=0
           for f in dmg/*.dmg; do
-            vols=$(apfs-fuse --list-volumes "$f" 2>/dev/null || true)
-            echo "== $f"; echo "$vols"
-            case "$vols" in
-              *SystemOS*) sys_dmg="$f" ;;
-              *AppOS*|*"App OS"*) app_dmg="$f" ;;
+            n=$((n+1))
+            m="mnt$n"; mkdir -p "$m"
+            echo "== $f ($(stat -c%s "$f") bytes)"
+            if ! sudo apfs-fuse "$f" "$m" >/dev/null 2>&1; then
+              echo "   mount failed"; continue
+            fi
+            sudo ls "$m" | head -5 || true
+            kind=$(sudo bash -c "$(declare -f classify); classify '$m'")
+            echo "   classified: $kind"
+            case "$kind" in
+              os)     [ -z "$os_dmg" ] && os_dmg="$f" ;;
+              sysos)  [ -z "$sys_dmg" ] && sys_dmg="$f" ;;
+              appos)  [ -z "$app_dmg" ] && app_dmg="$f" ;;
             esac
           done
-          # fall back to size order if the names did not show up
-          if [ -z "$sys_dmg" ] || [ -z "$app_dmg" ]; then
-            echo "volume names incomplete; using sizes"
-            mapfile -t by_size < <(ls -S dmg/*.dmg)
-            os_dmg="${by_size[0]:-}"; sys_dmg="${by_size[1]:-}"; app_dmg="${by_size[2]:-}"
-          else
-            # the remaining (largest) one is the OS root
-            for f in dmg/*.dmg; do
-              [ "$f" = "$sys_dmg" ] || [ "$f" = "$app_dmg" ] || os_dmg="$f"
-            done
-          fi
           echo "OS=$os_dmg SYSTEMOS=$sys_dmg APPOS=$app_dmg"
+          # fall back to size order for anything still missing
+          if [ -z "$os_dmg" ] || [ -z "$sys_dmg" ] || [ -z "$app_dmg" ]; then
+            echo "falling back to size order"
+            mapfile -t by_size < <(ls -S dmg/*.dmg)
+            [ -n "$os_dmg" ] || os_dmg="${by_size[0]:-}"
+            [ -n "$sys_dmg" ] || sys_dmg="${by_size[1]:-}"
+            [ -n "$app_dmg" ] || app_dmg="${by_size[2]:-}"
+          fi
+          echo "FINAL: OS=$os_dmg SYSTEMOS=$sys_dmg APPOS=$app_dmg"
           [ -n "$os_dmg" ] && [ -n "$sys_dmg" ] && [ -n "$app_dmg" ]
           sudo bash mkiosroot.sh "$os_dmg" "$sys_dmg" "$app_dmg" root.img "$ROOT_SIZE"
           ls -la root.img
