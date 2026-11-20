@@ -242,6 +242,45 @@ def patch_rec(root):
     return 0
 
 
+
+
+# --- apfs_vnops.c vnop_read: what the read path believes about the file --------------
+READ_OLD = "\tino = APFS_VP(vp)->an_ino;\n\tsize = APFS_VP(vp)->an_size;\n"
+
+READ_NEW = (
+    "\tino = APFS_VP(vp)->an_ino;\n"
+    "\tsize = APFS_VP(vp)->an_size;\n"
+    "\t/* HAKIOS-APFSSIZE: the read path's view of the file -- the inode it was built from\n"
+    "\t * and the size, plus the first bytes the caller asked for. */\n"
+    "\tif (!vnode_isdir(vp)) {\n"
+    "\t\tstatic int rshown;\n"
+    "\t\tif (rshown < 2) {\n"
+    "\t\t\trshown++;\n"
+    "\t\t\tpanic(\"APFSREAD obj %llu ino_size %llu an_size %llu mode %x\",\n"
+    "\t\t\t    (unsigned long long)ino.obj_id, (unsigned long long)ino.size,\n"
+    "\t\t\t    (unsigned long long)size, (unsigned)ino.mode);\n"
+    "\t\t}\n"
+    "\t}\n"
+)
+
+
+def patch_read(root):
+    f = pathlib.Path(root) / "bsd/miscfs/apfs/apfs_vnops.c"
+    if not f.exists():
+        print("patch-apfs-size-probe: apfs_vnops.c not found")
+        return 1
+    t2 = f.read_text(errors="surrogateescape")
+    if "HAKIOS-APFSSIZE: the read path" in t2:
+        print("patch-apfs-size-probe: vnop_read already has the probe")
+        return 0
+    if READ_OLD not in t2:
+        print("patch-apfs-size-probe: MISS: apfs_vnop_read is not the expected shape")
+        return 1
+    f.write_text(t2.replace(READ_OLD, READ_NEW, 1), errors="surrogateescape")
+    print("patch-apfs-size-probe: apfs_vnop_read panics with the read path's values")
+    return 0
+
+
 def main(root):
     p = pathlib.Path(root) / "bsd/miscfs/apfs/apfs_vnops.c"
     if not p.exists():
@@ -262,6 +301,7 @@ def main(root):
     rc |= patch_mach(root)
     rc |= patch_inode(root)
     rc |= patch_rec(root)
+    rc |= patch_read(root)
     return rc
 
 
