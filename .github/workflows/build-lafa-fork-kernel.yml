@@ -1,0 +1,109 @@
+name: build lafa kernel from the reference fork (macOS, SM8850)
+
+# ky554640/data-a-live is ShueiTsuki's pandora tree (Xiaomi 17 Pro, SM8850, Adreno 840,
+# iPhone X iOS 16.7.16, lock screen working) with lafa (realme GT8 Pro, this phone) work
+# layered on top: the 4 KiB page adaptations, the HID delay boot-args and the IOHIDEventSystem
+# stubs for backboardd.  Its xnu.yml is the build recipe; this workflow runs the same recipe
+# with that repository as the source.
+#
+# Differences from the reference xnu.yml, all because the source is a different repository:
+#   * actions/checkout points at the fork
+#   * the iig pregenerated cache and the xnu-iig-cache tool live in that checkout
+#
+# Public repository, so GitHub-hosted macOS runners are free for it.
+
+on:
+  workflow_dispatch:
+    inputs:
+      machine_config:
+        description: xnu MACHINE_CONFIG (PANDORA = the reference board, 4 KiB pages)
+        default: PANDORA
+      macos_version:
+        description: macOS release whose xnu to build (13.5 = xnu-8796, iOS 16 era)
+        default: "13.5"
+      ref_repo:
+        description: repository that holds the lafa-patched pandora tree
+        default: https://github.com/ky554640/data-a-live
+      keep_going:
+        description: make -k (collect all compile errors in one run)
+        default: "true"
+
+concurrency:
+  group: xnu-lafa-fork-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DXB_REPO: https://github.com/blacktop/darwin-xnu-build
+  DXB_SHA: 663906528d1cd5ea8fde7de6f16de73db9511549
+  MACOS_VERSION: ${{ inputs.macos_version || '13.5' }}
+  MACHINE_CONFIG: ${{ inputs.machine_config || 'PANDORA' }}
+
+jobs:
+  build:
+    # macos-15 is the current GA label (macos-14 was retired 2026-11-02).
+    # Xcode 16's iig emits IORPC.kernelContent, which xnu-8796 lacks; the tree ships
+    # pregenerated Xcode 15 iig output and xnu-iig-cache.py replays it.
+    runs-on: macos-15
+    timeout-minutes: 180
+    steps:
+      - name: Fetch the lafa-patched pandora tree
+        run: |
+          set -e
+          git init -q ref
+          git -C ref remote add origin "${{ inputs.ref_repo }}"
+          git -C ref fetch -q --depth 1 origin main
+          git -C ref checkout -q FETCH_HEAD
+          ls ref/xnu/patches | wc -l
+          ls ref/xnu/iig-pregen | head -3
+
+      - name: Fetch build script and stage patches
+        run: |
+          set -e
+          git init -q dxb
+          git -C dxb fetch -q --depth 1 "$DXB_REPO" "$DXB_SHA"
+          git -C dxb checkout -q FETCH_HEAD
+          cp ref/xnu/patches/*.patch ref/xnu/patches/*.sh dxb/patches/
+          # the staging scripts are gated on SWEET; FUXI and PANDORA use the same staged sources
+          sed -i '' 's/\[\[ "${MACHINE_CONFIG:-}" == SWEET \]\]/[[ "${MACHINE_CONFIG:-}" =~ ^(SWEET|FUXI|PANDORA)$ ]]/' dxb/patches/*.sh
+          # libfirehose_kernel is built arm64e-only; this kernel is plain arm64
+          sed -i '' 's/ARCHS="x86_64 arm64e" VALID_ARCHS="x86_64 arm64e"/ARCHS="x86_64 arm64e arm64" VALID_ARCHS="x86_64 arm64e arm64"/' dxb/build.sh
+          echo "staged patches: $(ls dxb/patches/*.patch | wc -l)"
+
+      - name: Deps
+        run: |
+          set -e
+          brew install jq gum bash cmake ninja
+          sw_vers
+          xcode-select -p
+          xcodebuild -version
+
+      - name: Build
+        working-directory: dxb
+        env:
+          MAKEFLAGS: ${{ inputs.keep_going == 'false' && '' || '-k' }}
+          IIG: ${{ github.workspace }}/ref/tools/xnu-iig-cache.py
+          XNU_IIG_CACHE: ${{ github.workspace }}/ref/xnu/iig-pregen
+        run: bash build.sh
+
+      - name: Collect the kernel
+        if: always()
+        run: |
+          mkdir -p out
+          cp -R dxb/fakeroot/System/Library/Kernels/. out/ 2>/dev/null || true
+          ls -la out
+          (cd out && shasum -a 256 kernel.* >> SHA256SUMS) 2>/dev/null || true
+          cat out/SHA256SUMS 2>/dev/null || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lafa-fork-kernel
+          path: out/
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Build log tail on failure
+        if: failure()
+        run: |
+          find dxb -name 'build.log' -o -name '*.rej' | head -20 || true
+          tail -300 dxb/build/xnu.obj/*/build.log 2>/dev/null || true
