@@ -86,6 +86,80 @@ def patch_exec(root):
     return 0
 
 
+
+
+# --- apfs_vfsops.c: the size the vnode is created with --------------------------------
+VNODE_OLD = "\tvfsp.vnfs_filesize = size;\n"
+
+VNODE_NEW = (
+    "\t/* HAKIOS-APFSSIZE: the size apfs_node_vnode is about to give this vnode */\n"
+    "\tif (vtype != VDIR) {\n"
+    "\t\tstatic int vshown;\n"
+    "\t\tif (vshown < 1) {\n"
+    "\t\t\tvshown++;\n"
+    "\t\t\tpanic(\"APFSSIZE vnode id %llu type %d size %llu ino_size %llu\",\n"
+    "\t\t\t    (unsigned long long)obj_id, (int)vtype, (unsigned long long)size,\n"
+    "\t\t\t    (unsigned long long)ino.size);\n"
+    "\t\t}\n"
+    "\t}\n"
+    "\tvfsp.vnfs_filesize = size;\n"
+)
+
+
+def patch_vnode(root):
+    f = pathlib.Path(root) / "bsd/miscfs/apfs/apfs_vfsops.c"
+    if not f.exists():
+        print("patch-apfs-size-probe: apfs_vfsops.c not found")
+        return 1
+    t2 = f.read_text(errors="surrogateescape")
+    if "HAKIOS-APFSSIZE: the size apfs_node_vnode" in t2:
+        print("patch-apfs-size-probe: apfs_vfsops.c already has the panic")
+        return 0
+    if VNODE_OLD not in t2:
+        print("patch-apfs-size-probe: MISS: apfs_vfsops.c vnfs_filesize is not the expected shape")
+        return 1
+    f.write_text(t2.replace(VNODE_OLD, VNODE_NEW, 1), errors="surrogateescape")
+    print("patch-apfs-size-probe: apfs_vfsops.c panics with the vnode size")
+    return 0
+
+
+# --- kern_exec.c grade_binary: what the kernel actually read -------------------------
+MACH_OLD = "\tif ((mach_header->magic != MH_MAGIC) &&\n\t    (mach_header->magic != MH_MAGIC_64)) {\n"
+
+MACH_NEW = (
+    "\t/* HAKIOS-APFSSIZE: the Mach-O header the kernel actually read */\n"
+    "\t{\n"
+    "\t\tstatic int mshown;\n"
+    "\t\tif (mshown < 1) {\n"
+    "\t\t\tmshown++;\n"
+    "\t\t\tpanic(\"MACHHDR magic %x filetype %d cputype %x cpusub %x ncmds %u size %llu\",\n"
+    "\t\t\t    (unsigned)mach_header->magic, (int)mach_header->filetype,\n"
+    "\t\t\t    (unsigned)mach_header->cputype, (unsigned)mach_header->cpusubtype,\n"
+    "\t\t\t    (unsigned)mach_header->ncmds, (unsigned long long)imgp->ip_arch_size);\n"
+    "\t\t}\n"
+    "\t}\n"
+    "\tif ((mach_header->magic != MH_MAGIC) &&\n"
+    "\t    (mach_header->magic != MH_MAGIC_64)) {\n"
+)
+
+
+def patch_mach(root):
+    f = pathlib.Path(root) / "bsd/kern/kern_exec.c"
+    if not f.exists():
+        print("patch-apfs-size-probe: kern_exec.c not found")
+        return 1
+    t2 = f.read_text(errors="surrogateescape")
+    if "HAKIOS-APFSSIZE: the Mach-O header" in t2:
+        print("patch-apfs-size-probe: kern_exec.c already has the mach header panic")
+        return 0
+    if MACH_OLD not in t2:
+        print("patch-apfs-size-probe: MISS: grade_binary header check is not the expected shape")
+        return 1
+    f.write_text(t2.replace(MACH_OLD, MACH_NEW, 1), errors="surrogateescape")
+    print("patch-apfs-size-probe: kern_exec.c panics with the Mach-O header")
+    return 0
+
+
 def main(root):
     p = pathlib.Path(root) / "bsd/miscfs/apfs/apfs_vnops.c"
     if not p.exists():
