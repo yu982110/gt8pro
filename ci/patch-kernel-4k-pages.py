@@ -122,6 +122,82 @@ def patch_board_headers(root):
     return 0
 
 
+
+
+
+# ------------------------------------------------------------------------------------------------
+# The user map and the commpage have to agree with the kernel's page size.  Missing this is what
+# made copyinstr() take a data abort on the first user-pointer load: the kernel translated 4 KiB
+# pages while the VM map of every 64-bit process still described 16 KiB entries, so the pmap walk
+# for user memory went off the rails.  This is the same change the reference's
+# 0104-unixnu-native-4k-user-abi.patch makes.
+MARK_USERMAP = "HAKIOS-LAFA-4K-USERMAP"
+
+MACH_OLD = """	if (result->is_64bit_addr) {
+		/* enforce 16KB alignment of VM map entries */
+		vm_map_set_page_shift(map, SIXTEENK_PAGE_SHIFT);
+	} else {
+		vm_map_set_page_shift(map, page_shift_user32);
+	}
+"""
+
+MACH_NEW = """	if (result->is_64bit_addr) {
+#if !defined(APPLE_ARM64_ARCH_FAMILY) && !__ARM_16K_PG__
+		/* HAKIOS-LAFA-4K-USERMAP: this kernel translates 4 KiB pages (the SoC has no 16 KiB
+		 * granule), so every 64-bit process's map has to describe 4 KiB entries as well.
+		 * With a 16 KiB map on 4 KiB hardware the pmap walk for user memory is wrong, and
+		 * the first copyin from user space (open's path string) takes a data abort. */
+		vm_map_set_page_shift(map, FOURK_PAGE_SHIFT);
+#else
+		/* enforce 16KB alignment of VM map entries */
+		vm_map_set_page_shift(map, SIXTEENK_PAGE_SHIFT);
+#endif
+	} else {
+		vm_map_set_page_shift(map, page_shift_user32);
+	}
+"""
+
+COMM_OLD = """	*((uint8_t*)(_COMM_PAGE_USER_PAGE_SHIFT_32_LEGACY + _COMM_PAGE_RW_OFFSET)) = (uint8_t) page_shift_user32;
+	*((uint8_t*)(_COMM_PAGE_USER_PAGE_SHIFT_32 + _COMM_PAGE_RO_OFFSET)) = (uint8_t) page_shift_user32;
+	*((uint8_t*)(_COMM_PAGE_USER_PAGE_SHIFT_64_LEGACY + _COMM_PAGE_RW_OFFSET)) = (uint8_t) SIXTEENK_PAGE_SHIFT;
+	*((uint8_t*)(_COMM_PAGE_USER_PAGE_SHIFT_64 + _COMM_PAGE_RO_OFFSET)) = (uint8_t) SIXTEENK_PAGE_SHIFT;
+"""
+
+COMM_NEW = """	*((uint8_t*)(_COMM_PAGE_USER_PAGE_SHIFT_32_LEGACY + _COMM_PAGE_RW_OFFSET)) = (uint8_t) page_shift_user32;
+	*((uint8_t*)(_COMM_PAGE_USER_PAGE_SHIFT_32 + _COMM_PAGE_RO_OFFSET)) = (uint8_t) page_shift_user32;
+	/* HAKIOS-LAFA-4K-USERMAP: tell user space the truth (4 KiB), not the 16 KiB this used to say */
+	*((uint8_t*)(_COMM_PAGE_USER_PAGE_SHIFT_64_LEGACY + _COMM_PAGE_RW_OFFSET)) = (uint8_t) FOURK_PAGE_SHIFT;
+	*((uint8_t*)(_COMM_PAGE_USER_PAGE_SHIFT_64 + _COMM_PAGE_RO_OFFSET)) = (uint8_t) FOURK_PAGE_SHIFT;
+"""
+
+
+def patch_usermap(root):
+    f = root / "bsd/kern/mach_loader.c"
+    f2 = root / "osfmk/arm/commpage/commpage.c"
+    if not f.exists() or not f2.exists():
+        print("patch-4k: mach_loader.c / commpage.c not found")
+        return 1
+    text = f.read_text(errors="surrogateescape")
+    if MARK_USERMAP in text:
+        print("patch-4k: user map already patched")
+    elif MACH_OLD in text:
+        f.write_text(text.replace(MACH_OLD, MACH_NEW, 1), errors="surrogateescape")
+        print("patch-4k: mach_loader.c: 64-bit user maps now use 4 KiB entries")
+    else:
+        print("patch-4k: MISS: mach_loader.c page-shift block is not the expected shape")
+        return 1
+    text = f2.read_text(errors="surrogateescape")
+    if MARK_USERMAP in text:
+        print("patch-4k: commpage already patched")
+    elif COMM_OLD in text:
+        f2.write_text(text.replace(COMM_OLD, COMM_NEW, 1), errors="surrogateescape")
+        print("patch-4k: commpage.c: user page shift now reports 4 KiB")
+    else:
+        print("patch-4k: MISS: commpage.c page-shift block is not the expected shape")
+        return 1
+    return 0
+
+
 def main(root):
     if len(sys.argv) < 2:
         print("usage: patch-kernel-4k-pages.py <xnu tree>")
@@ -129,6 +205,7 @@ def main(root):
     root = pathlib.Path(sys.argv[1])
     rc = patch_page_selection(root)
     rc |= patch_board_headers(root)
+    rc |= patch_usermap(root)
     return rc
 
 
