@@ -376,6 +376,19 @@ jobs:
           path: hakios/xnu-src/xnu-8796.121.2/BUILD
           key: xnuobj-${{ hashFiles('ci/**', 'lafa/**', '.github/workflows/build-kernel-bare.yml') }}
 
+      # A restored BUILD has the right content but old timestamps, so make would
+      # rebuild everything. Touch the objects so they look newer than the freshly
+      # checked out sources; a changed patch set never restores this cache at all.
+      - name: freshen restored object timestamps
+        run: |
+          B=hakios/xnu-src/xnu-8796.121.2/BUILD
+          if [ -d "$B" ]; then
+            find "$B" -type f -exec touch {} + 2>/dev/null || true
+            echo "touched $(find "$B" -type f | wc -l) object-tree files"
+          else
+            echo "no restored object tree; the build starts cold"
+          fi
+
       - name: build kernel
         run: |
           cd hakios
