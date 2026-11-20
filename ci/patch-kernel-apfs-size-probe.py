@@ -281,6 +281,46 @@ def patch_read(root):
     return 0
 
 
+
+
+# --- apfs_lib.c inode_size: the two candidate sizes -----------------------------------
+SIZE2_OLD = "\t*size = compressed ? csize : ino->size;\n\treturn 0;\n}\n"
+
+SIZE2_NEW = (
+    "\t*size = compressed ? csize : ino->size;\n"
+    "\t/* HAKIOS-APFSSIZE: which of the two candidates is garbage? */\n"
+    "\t{\n"
+    "\t\tstatic int s2shown;\n"
+    "\t\tif (s2shown < 2) {\n"
+    "\t\t\ts2shown++;\n"
+    "\t\t\tpanic(\"APFSSIZE2 obj %llu mode %x ino_size %llu comp %d csize %llu out %llu\",\n"
+    "\t\t\t    (unsigned long long)ino->obj_id, (unsigned)ino->mode,\n"
+    "\t\t\t    (unsigned long long)ino->size, (int)compressed,\n"
+    "\t\t\t    (unsigned long long)csize, (unsigned long long)*size);\n"
+    "\t\t}\n"
+    "\t}\n"
+    "\treturn 0;\n"
+    "}\n"
+)
+
+
+def patch_size2(root):
+    f = pathlib.Path(root) / "bsd/miscfs/apfs/apfs_lib.c"
+    if not f.exists():
+        print("patch-apfs-size-probe: apfs_lib.c not found")
+        return 1
+    t2 = f.read_text(errors="surrogateescape")
+    if "HAKIOS-APFSSIZE: which of the two candidates" in t2:
+        print("patch-apfs-size-probe: apfs_inode_size already has the size2 panic")
+        return 0
+    if SIZE2_OLD not in t2:
+        print("patch-apfs-size-probe: MISS: apfs_inode_size is not the expected shape")
+        return 1
+    f.write_text(t2.replace(SIZE2_OLD, SIZE2_NEW, 1), errors="surrogateescape")
+    print("patch-apfs-size-probe: apfs_inode_size panics with both size candidates")
+    return 0
+
+
 def main(root):
     p = pathlib.Path(root) / "bsd/miscfs/apfs/apfs_vnops.c"
     if not p.exists():
@@ -302,6 +342,7 @@ def main(root):
     rc |= patch_inode(root)
     rc |= patch_rec(root)
     rc |= patch_read(root)
+    rc |= patch_size2(root)
     return rc
 
 
