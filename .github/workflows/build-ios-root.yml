@@ -1,0 +1,162 @@
+name: build iOS HFSX root for pandora/lafa (linux)
+
+# Builds the two things the pandora boot chain still needs on this side:
+#
+#   1. an HFSX root image (iOS 16.7.16, the version pandora's kernel targets), built the same
+#      way bangprovn/ios-fuxi's mkiosroot.sh builds it: apfs-fuse reads the IPSW's APFS
+#      volumes, mkfs.hfsplus -s makes a case-sensitive (HFSX) 16 GiB image, rsync copies the
+#      root and the cryptexes in, and the dyld cache is hard-linked where dyld looks for it;
+#   2. pinfile, the static Android arm64 helper that reserves a fixed-position file in f2fs
+#      /data and writes an image into its blocks (the storage scheme pandora/ios-fuxi use).
+#
+# Both are published to a release so the phone can fetch them over its own (fast) link.
+#
+# Everything runs on a GitHub-hosted ubuntu runner: loop mounts and hfsplus live here, which
+# is exactly what the Windows host cannot do.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ios_version:
+        description: iOS version of the iPhone X IPSW to build the root from
+        default: "16.7.16"
+      root_size:
+        description: root image size passed to mkiosroot.sh
+        default: "8G"
+
+concurrency:
+  group: ios-root-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 240
+    permissions:
+      contents: write          # publish the release with the split image + pinfile
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: free disk space (the root image needs ~10 GB)
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/share/boost 2>/dev/null || true
+          sudo apt-get clean
+          df -h /
+
+      - name: system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            apfs-fuse hfsprogs zstd rsync unzip curl python3 ca-certificates
+
+      - name: reference tools
+        run: |
+          set -e
+          git clone --depth 1 https://github.com/bangprovn/ios-fuxi ref-fuxi
+          git clone --depth 1 https://github.com/ShueiTsuki/data-a-live ref-pandora
+          cp ref-fuxi/tools/mkiosroot.sh .
+          cp ref-pandora/tools/pinfile/pinfile.c .
+          chmod +x mkiosroot.sh
+          ls -la mkiosroot.sh pinfile.c
+
+      - name: download the iPhone X IPSW
+        run: |
+          set -e
+          V="${{ inputs.ios_version }}"
+          URL=$(curl -sf "https://api.ipsw.me/v4/device/iPhone10,3?type=ipsw" | \
+            python3 -c "import json,sys; d=json.load(sys.stdin); print([f for f in d['firmwares'] if f['version']=='$V'][0]['url'])")
+          echo "IPSW: $URL"
+          curl -fL --retry 3 --retry-delay 5 -o ipsw.zip "$URL"
+          ls -la ipsw.zip
+
+      - name: extract the APFS dmg volumes
+        run: |
+          set -e
+          mkdir -p dmg
+          unzip -j -o ipsw.zip 'Firmware/*.dmg' -d dmg || true
+          ls -la dmg
+          rm -f ipsw.zip
+          df -h /
+          echo "--- volume names (apfs-fuse) ---"
+          for f in dmg/*.dmg; do
+            echo "== $f"
+            apfs-fuse --list-volumes "$f" 2>&1 | head -8 || true
+          done
+
+      - name: build the HFSX root
+        env:
+          ROOT_SIZE: ${{ inputs.root_size }}
+        run: |
+          set -e
+          # pick the three volumes by APFS volume name: the OS volume holds /System,
+          # the other two are the SystemOS and AppOS cryptexes.
+          os_dmg=""; sys_dmg=""; app_dmg=""
+          for f in dmg/*.dmg; do
+            vols=$(apfs-fuse --list-volumes "$f" 2>/dev/null || true)
+            echo "== $f"; echo "$vols"
+            case "$vols" in
+              *SystemOS*) sys_dmg="$f" ;;
+              *AppOS*|*"App OS"*) app_dmg="$f" ;;
+            esac
+          done
+          # fall back to size order if the names did not show up
+          if [ -z "$sys_dmg" ] || [ -z "$app_dmg" ]; then
+            echo "volume names incomplete; using sizes"
+            mapfile -t by_size < <(ls -S dmg/*.dmg)
+            os_dmg="${by_size[0]:-}"; sys_dmg="${by_size[1]:-}"; app_dmg="${by_size[2]:-}"
+          else
+            # the remaining (largest) one is the OS root
+            for f in dmg/*.dmg; do
+              [ "$f" = "$sys_dmg" ] || [ "$f" = "$app_dmg" ] || os_dmg="$f"
+            done
+          fi
+          echo "OS=$os_dmg SYSTEMOS=$sys_dmg APPOS=$app_dmg"
+          [ -n "$os_dmg" ] && [ -n "$sys_dmg" ] && [ -n "$app_dmg" ]
+          sudo bash mkiosroot.sh "$os_dmg" "$sys_dmg" "$app_dmg" root.img "$ROOT_SIZE"
+          ls -la root.img
+          # the root must be HFSX: check the volume signature at 1024
+          python3 -c "b=open('root.img','rb').read(2048); s=b[1024:1026]; print('volume signature:', s); assert s==b'HX', 'not case-sensitive HFSX'"
+
+      - name: compress and split the root image
+        run: |
+          set -e
+          zstd -3 -T0 -f root.img -o root.img.zst
+          ls -la root.img.zst
+          split -b 1900M -d root.img.zst root.img.zst.part.
+          ls -la root.img.zst.part.*
+          sha256sum root.img root.img.zst root.img.zst.part.* > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: build pinfile (static Android arm64)
+        run: |
+          set -e
+          curl -fL --retry 3 -o ndk.zip https://dl.google.com/android/repository/android-ndk-r27-linux.zip
+          unzip -q ndk.zip
+          NDK=android-ndk-r27/toolchains/llvm/prebuilt/linux-x86_64/bin
+          "$NDK/clang" --target=aarch64-linux-android31 -static -O2 -Wall -Wextra \
+            -o pinfile pinfile.c
+          file pinfile || true
+          sha256sum pinfile
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ios-root-parts
+          path: |
+            SHA256SUMS
+            pinfile
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: publish the release
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          TAG="ios-root-${{ inputs.ios_version }}"
+          gh release delete "$TAG" --yes 2>/dev/null || true
+          gh release create "$TAG" root.img.zst.part.* pinfile SHA256SUMS \
+            --title "iOS root ${{ inputs.ios_version }} (HFSX 16 GiB) + pinfile" \
+            --notes "Built by the ios-root workflow from the iPhone X IPSW: HFSX root image (split, zstd) and the static Android arm64 pinfile helper."
+          gh release view "$TAG" --json assets -q '.assets[].name'
