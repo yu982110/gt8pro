@@ -160,6 +160,48 @@ def patch_mach(root):
     return 0
 
 
+
+
+# --- apfs_lib.c: is the inode record itself garbage? ---------------------------------
+INODE_OLD = "\t\tino->rdev = le32(xf);\n\t}\n\treturn 0;\n}\n"
+
+INODE_NEW = (
+    "\t\tino->rdev = le32(xf);\n"
+    "\t}\n"
+    "\t/* HAKIOS-APFSSIZE: the inode record as parsed; if these look like garbage the\n"
+    "\t * problem is the B-tree walk, not the file read. */\n"
+    "\t{\n"
+    "\t\tstatic int ishown;\n"
+    "\t\tif (ishown < 1) {\n"
+    "\t\t\tishown++;\n"
+    "\t\t\tpanic(\"APFSINO id %llu parent %llu mode %x size %llu nch %d dstream %d\",\n"
+    "\t\t\t    (unsigned long long)ino->obj_id, (unsigned long long)ino->parent_id,\n"
+    "\t\t\t    (unsigned)ino->mode, (unsigned long long)ino->size,\n"
+    "\t\t\t    (int)ino->nchildren, (int)ino->has_dstream);\n"
+    "\t\t}\n"
+    "\t}\n"
+    "\treturn 0;\n"
+    "}\n"
+)
+
+
+def patch_inode(root):
+    f = pathlib.Path(root) / "bsd/miscfs/apfs/apfs_lib.c"
+    if not f.exists():
+        print("patch-apfs-size-probe: apfs_lib.c not found")
+        return 1
+    t2 = f.read_text(errors="surrogateescape")
+    if "HAKIOS-APFSSIZE: the inode record as parsed" in t2:
+        print("patch-apfs-size-probe: apfs_lib.c already has the inode panic")
+        return 0
+    if INODE_OLD not in t2:
+        print("patch-apfs-size-probe: MISS: apfs_inode_get is not the expected shape")
+        return 1
+    f.write_text(t2.replace(INODE_OLD, INODE_NEW, 1), errors="surrogateescape")
+    print("patch-apfs-size-probe: apfs_lib.c panics with the parsed inode")
+    return 0
+
+
 def main(root):
     p = pathlib.Path(root) / "bsd/miscfs/apfs/apfs_vnops.c"
     if not p.exists():
@@ -178,6 +220,7 @@ def main(root):
     rc = patch_exec(root)
     rc |= patch_vnode(root)
     rc |= patch_mach(root)
+    rc |= patch_inode(root)
     return rc
 
 
