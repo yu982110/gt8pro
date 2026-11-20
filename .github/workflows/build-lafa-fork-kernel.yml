@@ -75,12 +75,15 @@ jobs:
           # libfirehose_kernel is built arm64e-only; this kernel is plain arm64
           sed -i '' 's/ARCHS="x86_64 arm64e" VALID_ARCHS="x86_64 arm64e"/ARCHS="x86_64 arm64e arm64" VALID_ARCHS="x86_64 arm64e arm64"/' dxb/build.sh
           # LAFA-FB: the reference's early framebuffer console (patches 0010/0012) is written for
-          # the sweet/fuxi panel (1080x2400, fb at 0x9c000000).  This phone has no debug UART, so
-          # that console is the only way to see an early panic -- retarget it at the lafa panel
-          # (1440x3136, fb at 0xfc800000) before the patch files are applied.
-          cp ci/hakios/lafa-fb-retarget.sh dxb/patches/0000-lafa-fb-retarget.sh
-          echo "staged patches: $(ls dxb/patches/*.patch | wc -l), scripts: $(ls dxb/patches/*.sh | wc -l)"
-          ls -la dxb/patches/0000-lafa-fb-retarget.sh
+          # the sweet/fuxi panel and draws on fb 0x9c000000.  This phone has no debug UART, so that
+          # console is the only way to see an early panic -- point it at lafa's framebuffer,
+          # 0xfc800000 (measured: our loader draws there; pandora's mkadt_pandora.py uses it for
+          # the splash region).  Address only: the width/height/stride also appear as context lines
+          # in 0012, and rewriting those makes that patch fail to apply.
+          sed -i '' 's/0x9c000000/0xfc800000/g' dxb/patches/0010-sweet-early-framebuffer-debug.patch \
+              dxb/patches/0012-sweet-keep-debug-console-after-ttbr0.patch
+          echo "LAFA-FB: 0xfc800000 occurrences: $(grep -c '0xfc800000' dxb/patches/0010-sweet-early-framebuffer-debug.patch dxb/patches/0012-sweet-keep-debug-console-after-ttbr0.patch | tr '\n' ' ')"
+          echo "staged patches: $(ls dxb/patches/*.patch | wc -l)"
 
       - name: Deps
         run: |
