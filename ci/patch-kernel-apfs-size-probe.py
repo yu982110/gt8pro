@@ -1,20 +1,22 @@
 #!/usr/bin/env python3
-"""Log what APFS tells the kernel about a file's size, right where the kernel reads it.
+"""Panic with the APFS size chain's values, so they reach the ring.
 
-State: the kernel mounts the APFS root, finds /sbin/launchd, and then refuses to exec it:
+Where this stands: the kernel mounts the APFS root, finds /sbin/launchd, and refuses to
+exec it --
 
     panic: Process 1 exec of /sbin/launchd failed, errno 8 @kern_exec.c:7295
 
-errno 8 is ENOEXEC, which bsd/kern/kern_exec.c:6266 returns for exactly one reason:
+-- errno 8 being ENOEXEC, which bsd/kern/kern_exec.c:6266 returns for a zero-length file.
+The value comes from apfs_vnop_getattr()'s va_data_size, taken from an->an_size, which
+apfs_node_vnode() set from apfs_inode_size() (the decmpfs header's uncompressed size, or
+the inode's DSTREAM size).
 
-    /* Disallow zero length files */
-    if (vap->va_data_size == 0) return ENOEXEC;
-
-So the value has to come from APFS getattr: apfs_vnop_getattr() fills va_data_size from
-an->an_size, which apfs_node_vnode() set from apfs_inode_size() (either the decmpfs
-header's uncompressed size or the inode's DSTREAM size).  This patch logs both ends into
-the loader's ring -- the only log that survives a panic on this phone -- for the first
-few files of each kind, then stops, so the ring cannot be flooded.
+The earlier attempt logged this through loader_log_line(), which writes into the kernel's
+in-memory log buffer -- the on-device ring is only written when the kernel returns to the
+loader, and a DB_HALT panic never returns.  This version panics instead, with the values in
+the panic text: the panic text is what the loader writes down, and the debugger halts right
+there, so the numbers are readable from the ring.  It fires once, on the first regular
+file's getattr, which is /sbin/launchd.
 
     python3 ci/patch-kernel-apfs-size-probe.py <xnu tree>
 """
@@ -23,91 +25,42 @@ import sys
 
 MARK = "HAKIOS-APFSSIZE"
 
-PROTO = """/* HAKIOS-APFSSIZE */
-#include <libkern/libkern.h>
-extern void loader_log_line(const char *line);
-"""
+GETATTR_OLD = "\tino = an->an_ino;\n\tsize = an->an_size;\n"
 
-# --- apfs_vnop_getattr: what the kernel's getattr is told ------------------------------
-GETATTR_OLD = """	ino = an->an_ino;
-	size = an->an_size;
-"""
-
-GETATTR_NEW = """	ino = an->an_ino;
-	size = an->an_size;
-	/* HAKIOS-APFSSIZE: the value bsd/kern/kern_exec.c's ENOEXEC test will see */
-	{
-		static int gshown;
-		if (gshown < 24) {
-			char line[160];
-			gshown++;
-			snprintf(line, sizeof(line),
-			    "HAKIOS-APFSSIZE getattr id %llu an_size %llu ino_size %llu\\n",
-			    (unsigned long long)an->an_id, (unsigned long long)an->an_size,
-			    (unsigned long long)ino.size);
-			loader_log_line(line);
-		}
-	}
-"""
-
-# --- apfs_inode_size: the two values it chooses between ------------------------------
-SIZE_OLD = """	/* only the decmpfs header is needed here, not the table of pieces */
-	error = cfile_header(vol, ino, &compressed, &type, &csize, &in_rsrc);
-"""
-
-SIZE_NEW = """	/* HAKIOS-APFSSIZE: log before anything returns early (a directory has no decmpfs
-	 * header and cfile_header returns ENOENT for it) */
-	{
-		static int shown;
-		if (shown < 24) {
-			char line[160];
-			shown++;
-			snprintf(line, sizeof(line),
-			    "HAKIOS-APFSSIZE inode_size obj %llu mode %x ino_size %llu\\n",
-			    (unsigned long long)ino->obj_id, (unsigned)ino->mode,
-			    (unsigned long long)ino->size);
-			loader_log_line(line);
-		}
-	}
-	/* only the decmpfs header is needed here, not the table of pieces */
-	error = cfile_header(vol, ino, &compressed, &type, &csize, &in_rsrc);
-"""
+GETATTR_NEW = (
+    "\tino = an->an_ino;\n"
+    "\tsize = an->an_size;\n"
+    "\t/* HAKIOS-APFSSIZE: the value bsd/kern/kern_exec.c's ENOEXEC test sees.  A panic, not\n"
+    "\t * the loader's log: that log only reaches the ring when the kernel returns to the\n"
+    "\t * loader, and a DB_HALT panic never does.  The panic text is what gets written down. */\n"
+    "\tif ((ino.mode & APFS_S_IFMT) != APFS_S_IFDIR) {\n"
+    "\t\tstatic int hakios_apfssize_shown;\n"
+    "\t\tif (hakios_apfssize_shown < 1) {\n"
+    "\t\t\thakios_apfssize_shown++;\n"
+    "\t\t\tpanic(\"APFSSIZE id %llu an_size %llu ino_size %llu mode %x\",\n"
+    "\t\t\t    (unsigned long long)an->an_id, (unsigned long long)an->an_size,\n"
+    "\t\t\t    (unsigned long long)ino.size, (unsigned)ino.mode);\n"
+    "\t\t}\n"
+    "\t}\n"
+)
 
 
-def insert_proto(text):
-    lines = text.split("\n")
-    for i, l in enumerate(lines):
-        if l.startswith("#include"):
-            lines.insert(i + 1, PROTO)
-            break
-    return "\n".join(lines)
-
-
-def patch_one(path, old, new, what):
-    p = pathlib.Path(path)
+def main(root):
+    p = pathlib.Path(root) / "bsd/miscfs/apfs/apfs_vnops.c"
     if not p.exists():
         print(f"patch-apfs-size-probe: {p} not found")
         return 1
     t = p.read_text(errors="surrogateescape")
     if MARK in t:
-        print(f"patch-apfs-size-probe: {what} already has the probe")
+        print("patch-apfs-size-probe: already applied")
         return 0
-    if old not in t:
-        print(f"patch-apfs-size-probe: MISS: {what} is not the expected shape")
+    if GETATTR_OLD not in t:
+        print("patch-apfs-size-probe: MISS: apfs_vnop_getattr is not the expected shape")
         return 1
-    t = insert_proto(t).replace(old, new, 1)
+    t = t.replace(GETATTR_OLD, GETATTR_NEW, 1)
     p.write_text(t, errors="surrogateescape")
-    print(f"patch-apfs-size-probe: {what} now logs into the ring")
+    print("patch-apfs-size-probe: apfs_vnop_getattr panics with the size values")
     return 0
-
-
-def main(root):
-    tree = pathlib.Path(root)
-    rc = patch_one(tree / "bsd/miscfs/apfs/apfs_vnops.c", GETATTR_OLD, GETATTR_NEW,
-                   "apfs_vnop_getattr")
-    rc |= patch_one(tree / "bsd/miscfs/apfs/apfs_lib.c", SIZE_OLD, SIZE_NEW,
-                    "apfs_inode_size")
-    return rc
 
 
 if __name__ == "__main__":
