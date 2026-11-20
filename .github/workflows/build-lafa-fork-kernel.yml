@@ -18,6 +18,9 @@ on:
       machine_config:
         description: xnu MACHINE_CONFIG (PANDORA = the reference board, 4 KiB pages)
         default: PANDORA
+      kernel_config:
+        description: RELEASE / DEVELOPMENT / DEBUG (DEVELOPMENT prints panics)
+        default: DEVELOPMENT
       macos_version:
         description: macOS release whose xnu to build (13.5 = xnu-8796, iOS 16 era)
         default: "13.5"
@@ -37,6 +40,7 @@ env:
   DXB_SHA: 663906528d1cd5ea8fde7de6f16de73db9511549
   MACOS_VERSION: ${{ inputs.macos_version || '13.5' }}
   MACHINE_CONFIG: ${{ inputs.machine_config || 'PANDORA' }}
+  KERNEL_CONFIG: ${{ inputs.kernel_config || 'DEVELOPMENT' }}
 
 jobs:
   build:
