@@ -202,6 +202,46 @@ def patch_inode(root):
     return 0
 
 
+
+
+# --- apfs_lib.c cursor_next: the record as the B-tree walk produced it ---------------
+REC_OLD = "\t\t\trec->obj_id = jkey_id(k);\n\t\t\trec->type = jkey_type(k);\n\t\t\treturn 0;\n"
+
+REC_NEW = (
+    "\t\t\trec->obj_id = jkey_id(k);\n"
+    "\t\t\trec->type = jkey_type(k);\n"
+    "\t\t\t/* HAKIOS-APFSSIZE: the record the B-tree walk produced; garbage here means the\n"
+    "\t\t\t * node entry offsets or the node layout are wrong, not the file read. */\n"
+    "\t\t\t{\n"
+    "\t\t\t\tstatic int rshown;\n"
+    "\t\t\t\tif (rshown < 3) {\n"
+    "\t\t\t\t\trshown++;\n"
+    "\t\t\t\t\tpanic(\"APFSREC obj %llu type %x key_len %u val_len %u\",\n"
+    "\t\t\t\t\t    (unsigned long long)rec->obj_id, (unsigned)rec->type,\n"
+    "\t\t\t\t\t    (unsigned)rec->key_len, (unsigned)rec->val_len);\n"
+    "\t\t\t\t\t}\n"
+    "\t\t\t}\n"
+    "\t\t\treturn 0;\n"
+)
+
+
+def patch_rec(root):
+    f = pathlib.Path(root) / "bsd/miscfs/apfs/apfs_lib.c"
+    if not f.exists():
+        print("patch-apfs-size-probe: apfs_lib.c not found")
+        return 1
+    t2 = f.read_text(errors="surrogateescape")
+    if "HAKIOS-APFSSIZE: the record the B-tree" in t2:
+        print("patch-apfs-size-probe: cursor_next already has the record panic")
+        return 0
+    if REC_OLD not in t2:
+        print("patch-apfs-size-probe: MISS: apfs_cursor_next is not the expected shape")
+        return 1
+    f.write_text(t2.replace(REC_OLD, REC_NEW, 1), errors="surrogateescape")
+    print("patch-apfs-size-probe: cursor_next panics with the record")
+    return 0
+
+
 def main(root):
     p = pathlib.Path(root) / "bsd/miscfs/apfs/apfs_vnops.c"
     if not p.exists():
@@ -221,6 +261,7 @@ def main(root):
     rc |= patch_vnode(root)
     rc |= patch_mach(root)
     rc |= patch_inode(root)
+    rc |= patch_rec(root)
     return rc
 
 
