@@ -87,9 +87,14 @@ jobs:
 
       - name: Collect the kernel
         if: always()
+        # Only the Mach-O kernel: the link directory next to it is ~128 MB of archives and
+        # link arguments that this port never uses, and it is what made the artifact 60 MB
+        # (slow to download over a congested link).
         run: |
           mkdir -p out
-          cp -R dxb/fakeroot/System/Library/Kernels/. out/ 2>/dev/null || true
+          cp dxb/fakeroot/System/Library/Kernels/kernel.* out/ 2>/dev/null || true
+          rm -f out/kernel.*.link 2>/dev/null || true
+          rm -rf out/*.link 2>/dev/null || true
           ls -la out
           (cd out && shasum -a 256 kernel.* >> SHA256SUMS) 2>/dev/null || true
           cat out/SHA256SUMS 2>/dev/null || true
