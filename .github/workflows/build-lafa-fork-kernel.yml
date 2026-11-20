@@ -76,10 +76,13 @@ jobs:
           sed -i '' 's/ARCHS="x86_64 arm64e" VALID_ARCHS="x86_64 arm64e"/ARCHS="x86_64 arm64e arm64" VALID_ARCHS="x86_64 arm64e arm64"/' dxb/build.sh
           # HAKIOS-EARLYFB: a framebuffer console that exists before pe_init() sets one up.  This
           # phone has no debug UART, so without it a panic in early startup is completely silent.
-          # 9999 so it is applied after the reference's 0001..0331 series.
-          cp ci/hakios/pandora-earlyfb.patch dxb/patches/9999-pandora-earlyfb.patch
+          # 0000 so it is applied FIRST: the reference's 0001..0331 series rewrites the very
+          # functions this patch touches (arm_init/machine_startup), and a later position fails
+          # "git apply --check" and is skipped.
+          cp ci/hakios/pandora-earlyfb.patch dxb/patches/0000-pandora-earlyfb.patch
           echo "staged patches: $(ls dxb/patches/*.patch | wc -l)"
-          echo "earlyfb patch: $(stat -f%z dxb/patches/9999-pandora-earlyfb.patch) bytes"
+          ls -la dxb/patches/0000-pandora-earlyfb.patch
+          grep -n 'HAKIOS-EARLYFB' dxb/patches/0000-pandora-earlyfb.patch | head -2
 
       - name: Deps
         run: |
