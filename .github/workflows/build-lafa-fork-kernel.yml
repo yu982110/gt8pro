@@ -74,15 +74,13 @@ jobs:
           sed -i '' 's/\[\[ "${MACHINE_CONFIG:-}" == SWEET \]\]/[[ "${MACHINE_CONFIG:-}" =~ ^(SWEET|FUXI|PANDORA)$ ]]/' dxb/patches/*.sh
           # libfirehose_kernel is built arm64e-only; this kernel is plain arm64
           sed -i '' 's/ARCHS="x86_64 arm64e" VALID_ARCHS="x86_64 arm64e"/ARCHS="x86_64 arm64e arm64" VALID_ARCHS="x86_64 arm64e arm64"/' dxb/build.sh
-          # HAKIOS-EARLYFB: a framebuffer console that exists before pe_init() sets one up.  This
-          # phone has no debug UART, so without it a panic in early startup is completely silent.
-          # 0000 so it is applied FIRST: the reference's 0001..0331 series rewrites the very
-          # functions this patch touches (arm_init/machine_startup), and a later position fails
-          # "git apply --check" and is skipped.
-          cp ci/hakios/pandora-earlyfb.patch dxb/patches/0000-pandora-earlyfb.patch
-          echo "staged patches: $(ls dxb/patches/*.patch | wc -l)"
-          ls -la dxb/patches/0000-pandora-earlyfb.patch
-          grep -n 'HAKIOS-EARLYFB' dxb/patches/0000-pandora-earlyfb.patch | head -2
+          # LAFA-FB: the reference's early framebuffer console (patches 0010/0012) is written for
+          # the sweet/fuxi panel (1080x2400, fb at 0x9c000000).  This phone has no debug UART, so
+          # that console is the only way to see an early panic -- retarget it at the lafa panel
+          # (1440x3136, fb at 0xfc800000) before the patch files are applied.
+          cp ci/hakios/lafa-fb-retarget.sh dxb/patches/0000-lafa-fb-retarget.sh
+          echo "staged patches: $(ls dxb/patches/*.patch | wc -l), scripts: $(ls dxb/patches/*.sh | wc -l)"
+          ls -la dxb/patches/0000-lafa-fb-retarget.sh
 
       - name: Deps
         run: |
