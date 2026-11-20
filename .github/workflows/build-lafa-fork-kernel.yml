@@ -50,6 +50,9 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 180
     steps:
+      # our own tree, for ci/hakios (the earlyfb patch and friends)
+      - uses: actions/checkout@v4
+
       - name: Fetch the lafa-patched pandora tree
         run: |
           set -e
