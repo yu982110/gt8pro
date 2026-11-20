@@ -43,11 +43,21 @@ jobs:
           sudo apt-get clean
           df -h /
 
-      - name: system packages
+      - name: system packages (apfs-fuse is not in 22.04, so build it)
         run: |
+          set -e
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            apfs-fuse hfsprogs zstd rsync unzip curl python3 ca-certificates
+            hfsprogs zstd rsync unzip curl python3 ca-certificates \
+            cmake build-essential pkg-config libfuse3-dev zlib1g-dev libbz2-dev \
+            libssl-dev libattr1-dev libicu-dev
+          git clone --depth 1 https://github.com/sgan81/apfs-fuse.git
+          cd apfs-fuse
+          git submodule update --init --depth 1
+          cmake -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build -j"$(nproc)"
+          sudo install -m755 build/apfs-fuse /usr/local/bin/apfs-fuse
+          apfs-fuse --help 2>&1 | head -3
 
       - name: reference tools
         run: |
