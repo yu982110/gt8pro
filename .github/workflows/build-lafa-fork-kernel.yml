@@ -102,6 +102,29 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
+      # The artifact download goes through a CDN that is very slow from China.  Also
+      # commit the kernel to a ci-out branch, so the same file can be fetched from
+      # raw.githubusercontent.com or jsDelivr in seconds.
+      - name: Publish the kernel on the ci-out branch
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          K=$(ls out/kernel.development.* 2>/dev/null | head -1 || true)
+          [ -n "$K" ] || { echo 'no kernel to publish'; exit 0; }
+          WORK=$(mktemp -d)
+          cd "$WORK"
+          git init -q .
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
+          git checkout -q -b ci-out
+          cp "$GITHUB_WORKSPACE/$K" ./pandora-lafa-kernel
+          sha256sum pandora-lafa-kernel > pandora-lafa-kernel.sha256
+          git add pandora-lafa-kernel pandora-lafa-kernel.sha256
+          git -c user.email=ci@local -c user.name=ci commit -q -m "ci: kernel $(date -u +%Y-%m-%dT%H:%MZ)"
+          git push -q -f origin ci-out
+          echo "published $(stat -c%s pandora-lafa-kernel) bytes on ci-out"
+
       - name: Build log tail on failure
         if: failure()
         run: |
