@@ -22,7 +22,7 @@ on:
         default: "16.7.16"
       root_size:
         description: root image size passed to mkiosroot.sh
-        default: "8G"
+        default: "16G"
 
 concurrency:
   group: ios-root-${{ github.ref }}
