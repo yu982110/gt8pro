@@ -59,6 +59,19 @@ jobs:
           sudo install -m755 build/apfs-fuse /usr/local/bin/apfs-fuse
           apfs-fuse --help 2>&1 | head -3
 
+      - name: hfsplus kernel module (mount -t hfsplus needs it)
+        run: |
+          set +e
+          sudo modprobe hfsplus 2>&1 || true
+          if ! grep -q hfsplus /proc/filesystems; then
+            echo "hfsplus not in /proc/filesystems; installing modules-extra"
+            sudo apt-get install -y --no-install-recommends "linux-modules-extra-$(uname -r)"
+            sudo depmod -a
+            sudo modprobe hfsplus 2>&1 || true
+          fi
+          grep -q hfsplus /proc/filesystems && echo "hfsplus available" || echo "hfsplus STILL MISSING"
+          cat /proc/filesystems | tr '\n' ' '
+
       - name: reference tools
         run: |
           set -e
@@ -102,56 +115,50 @@ jobs:
           ROOT_SIZE: ${{ inputs.root_size }}
         run: |
           set -e
-          # The 16.7.16 IPSW carries five dmgs at the top level.  They are told apart by what
-          # they mount as (the volumes are all named "root" in the container): the OS volume has
-          # /System/Library/CoreServices, the SystemOS volume has the shared dyld cache, the App
-          # volume has neither.  Sizes break ties when a check is inconclusive.
+          # Five dmgs at the top level.  Distinguish by content inside the "root" volume:
+          #   SystemOS  = /System/Library/Caches/com.apple.dyld is a real directory (the cache)
+          #   OS        = CoreServices/SystemVersion.plist but the dyld path is a symlink or absent
+          #   AppOS     = neither, and it is one of the small ones
           ls -la dmg
           classify() {
             local mount="$1"
-            if [ -e "$mount/root/System/Library/CoreServices/SpringBoard.app" ] || \
-               [ -e "$mount/root/System/Library/CoreServices/SystemVersion.plist" ]; then
-              echo os; return
-            fi
-            if [ -e "$mount/root/System/Library/Caches/com.apple.dyld" ] || \
-               [ -e "$mount/root/usr/lib/dyld" ]; then
+            if [ -d "$mount/root/System/Library/Caches/com.apple.dyld" ] && \
+               [ ! -L "$mount/root/System/Library/Caches/com.apple.dyld" ]; then
               echo sysos; return
+            fi
+            if [ -e "$mount/root/System/Library/CoreServices/SystemVersion.plist" ]; then
+              echo os; return
             fi
             if [ -d "$mount/root" ]; then echo appos; return; fi
             echo none
           }
-          os_dmg=""; sys_dmg=""; app_dmg=""
+          os_dmg=""; sys_dmg=""; app_dmg=""; mounted=()
           n=0
           for f in dmg/*.dmg; do
-            n=$((n+1))
-            m="mnt$n"; mkdir -p "$m"
+            n=$((n+1)); m="mnt$n"; mkdir -p "$m"
             echo "== $f ($(stat -c%s "$f") bytes)"
-            if ! sudo apfs-fuse "$f" "$m" >/dev/null 2>&1; then
-              echo "   mount failed"; continue
-            fi
-            sudo ls "$m" | head -5 || true
+            if ! sudo apfs-fuse "$f" "$m" >/dev/null 2>&1; then echo "   mount failed"; continue; fi
+            mounted+=("$f")
             kind=$(sudo bash -c "$(declare -f classify); classify '$m'")
             echo "   classified: $kind"
             case "$kind" in
-              os)     [ -z "$os_dmg" ] && os_dmg="$f" ;;
-              sysos)  [ -z "$sys_dmg" ] && sys_dmg="$f" ;;
-              appos)  [ -z "$app_dmg" ] && app_dmg="$f" ;;
+              os)    [ -z "$os_dmg" ]  && os_dmg="$f" ;;
+              sysos) [ -z "$sys_dmg" ] && sys_dmg="$f" ;;
+              appos) [ -z "$app_dmg" ] && app_dmg="$f" ;;
             esac
           done
-          echo "OS=$os_dmg SYSTEMOS=$sys_dmg APPOS=$app_dmg"
-          # fall back to size order for anything still missing
+          # fall back to size order among the ones that mounted
           if [ -z "$os_dmg" ] || [ -z "$sys_dmg" ] || [ -z "$app_dmg" ]; then
-            echo "falling back to size order"
-            mapfile -t by_size < <(ls -S dmg/*.dmg)
-            [ -n "$os_dmg" ] || os_dmg="${by_size[0]:-}"
-            [ -n "$sys_dmg" ] || sys_dmg="${by_size[1]:-}"
-            [ -n "$app_dmg" ] || app_dmg="${by_size[2]:-}"
+            echo "falling back to size order"; ls -S "${mounted[@]}"
+            mapfile -t by_size < <(ls -S "${mounted[@]}")
+            [ -n "$os_dmg" ]  || os_dmg="${by_size[0]:-}"
+            [ -n "$sys_dmg" ] || { [ "${by_size[1]:-}" != "$os_dmg" ] && sys_dmg="${by_size[1]:-}"; }
+            [ -n "$app_dmg" ] || { [ "${by_size[2]:-}" != "$sys_dmg" ] && app_dmg="${by_size[2]:-}"; }
           fi
           echo "FINAL: OS=$os_dmg SYSTEMOS=$sys_dmg APPOS=$app_dmg"
           [ -n "$os_dmg" ] && [ -n "$sys_dmg" ] && [ -n "$app_dmg" ]
           sudo bash mkiosroot.sh "$os_dmg" "$sys_dmg" "$app_dmg" root.img "$ROOT_SIZE"
           ls -la root.img
-          # the root must be HFSX: check the volume signature at 1024
           python3 -c "b=open('root.img','rb').read(2048); s=b[1024:1026]; print('volume signature:', s); assert s==b'HX', 'not case-sensitive HFSX'"
 
       - name: compress and split the root image
