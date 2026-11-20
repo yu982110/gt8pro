@@ -1,31 +1,25 @@
 #!/bin/bash
-# Retarget the reference's early framebuffer console at the lafa panel.
+# Point the reference's early framebuffer console at the lafa panel's framebuffer.
 #
-# The reference brings up an early framebuffer console long before pe_init() can set up a
-# real one (0010-sweet-early-framebuffer-debug.patch, 0012-sweet-keep-debug-console-after-ttbr0.patch).
-# Its constants are the sweet/fuxi panel (1080x2400, stride 4320, fb at 0x9c000000).  On lafa the
-# panel is 1440x3136, stride 5760, and the framebuffer sits at 0xfc800000 -- the same address our
-# UEFI loader draws its own log on, and the address pandora's mkadt_pandora.py uses for the
-# splash region.  This script runs from darwin-xnu-build's patch step BEFORE the *.patch files
-# are applied, so it edits the patch files themselves.
+# The reference (0010-sweet-early-framebuffer-debug.patch, 0012-sweet-keep-debug-console-after-ttbr0.patch)
+# brings up an early console before pe_init() has one.  Its framebuffer address is 0x9c000000, which
+# is the sweet/fuxi splash address; lafa's panel framebuffer is at 0xfc800000 (measured: our UEFI
+# loader draws on it, and pandora's mkadt_pandora.py uses 0xfc800000 for the splash region).
 #
-# Runs as: (cd ${WORK_DIR}/xnu && KDCROOT=... bash <this>)
+# This script runs from darwin-xnu-build's patch step BEFORE the *.patch files are applied, so it
+# edits the patch files themselves.  Only the address is rewritten: the 0x9c000000 occurrences are
+# added ('+') or removed ('-') lines in both patches, so rewriting both keeps the chain consistent.
+# The width/height/stride were deliberately left at 1080x2400 -- those occur as context lines in
+# 0012, and changing them makes that patch fail to apply; the console still renders in the
+# top-left of the 1440x3136 panel and scrolls inside its own 1080x2400 window.
 set +e
 PATCHES="$(dirname "$(pwd)")/patches"
-[ -d "$PATCHES" ] || { echo "LAFA-FB: no patches dir at $PATCHES (skipping)"; exit 0; }
-
-echo "LAFA-FB: retargeting the early console in $PATCHES"
+if [ ! -d "$PATCHES" ]; then
+	echo "LAFA-FB: no patches dir at $PATCHES (skipping)"
+	exit 0
+fi
 before=$(grep -l '0x9c000000' "$PATCHES"/*.patch 2>/dev/null | wc -l | tr -d ' ')
-before=${before:-0}
 sed -i '' 's/0x9c000000/0xfc800000/g' "$PATCHES"/*.patch
-sed -i '' 's/EARLY_WIDTH 1080u/EARLY_WIDTH 1440u/g' "$PATCHES"/*.patch
-sed -i '' 's/EARLY_HEIGHT 2400u/EARLY_HEIGHT 3136u/g' "$PATCHES"/*.patch
-sed -i '' 's/(4320u \/ 4)/(5760u \/ 4)/g' "$PATCHES"/*.patch
-# start.s stage-0 band starts at the last 32 rows of the panel
-sed -i '' 's/2368 \* 4320/2880 * 5760/g' "$PATCHES"/*.patch
 after=$(grep -l '0xfc800000' "$PATCHES"/*.patch 2>/dev/null | wc -l | tr -d ' ')
-after=${after:-0}
-echo "LAFA-FB: patches mentioning 0x9c000000 before: $before, 0xfc800000 after: $after"
-grep -h 'EARLY_WIDTH\|EARLY_HEIGHT\|EARLY_STRIDE\|0xfc800000' "$PATCHES"/*.patch 2>/dev/null | sort -u | head -8 || true
-
+echo "LAFA-FB: fb address 0x9c000000 -> 0xfc800000 in $before patch files ($after now carry 0xfc800000)"
 exit 0
