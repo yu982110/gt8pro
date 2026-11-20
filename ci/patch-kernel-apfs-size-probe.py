@@ -45,6 +45,47 @@ GETATTR_NEW = (
 )
 
 
+
+
+# ------------------------------------------------------------------------------------------------
+# And the consumer end: bsd/kern/kern_exec.c's exec_check_permissions() is the code that returns
+# ENOEXEC for a zero-length file -- it says so in its own comment.  Panic there with everything
+# that test can see, so the ring names the source of the zero.
+EXEC_OLD = """	/* Disallow zero length files */
+	if (vap->va_data_size == 0) {
+		return ENOEXEC;
+	}
+"""
+
+EXEC_NEW = """	/* Disallow zero length files */
+	if (vap->va_data_size == 0) {
+		/* HAKIOS-APFSSIZE: the ENOEXEC site.  A panic, so the values reach the ring. */
+		panic("EXECZERO start %llu size %llu alloc %llu size2 %llu type %d mode %x",
+		    (unsigned long long)vap->va_fileid, (unsigned long long)vap->va_data_size,
+		    (unsigned long long)vap->va_data_alloc, (unsigned long long)vap->va_total_size,
+		    (int)vap->va_type, (unsigned)vap->va_mode);
+		return ENOEXEC;
+	}
+"""
+
+
+def patch_exec(root):
+    f = pathlib.Path(root) / "bsd/kern/kern_exec.c"
+    if not f.exists():
+        print("patch-apfs-size-probe: kern_exec.c not found")
+        return 1
+    t2 = f.read_text(errors="surrogateescape")
+    if "HAKIOS-APFSSIZE: the ENOEXEC site" in t2:
+        print("patch-apfs-size-probe: kern_exec.c already has the panic")
+        return 0
+    if EXEC_OLD not in t2:
+        print("patch-apfs-size-probe: MISS: exec_check_permissions is not the expected shape")
+        return 1
+    f.write_text(t2.replace(EXEC_OLD, EXEC_NEW, 1), errors="surrogateescape")
+    print("patch-apfs-size-probe: kern_exec.c panics at the ENOEXEC site")
+    return 0
+
+
 def main(root):
     p = pathlib.Path(root) / "bsd/miscfs/apfs/apfs_vnops.c"
     if not p.exists():
@@ -60,7 +101,7 @@ def main(root):
     t = t.replace(GETATTR_OLD, GETATTR_NEW, 1)
     p.write_text(t, errors="surrogateescape")
     print("patch-apfs-size-probe: apfs_vnop_getattr panics with the size values")
-    return 0
+    return patch_exec(root)
 
 
 if __name__ == "__main__":
