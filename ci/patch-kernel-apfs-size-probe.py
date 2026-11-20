@@ -167,15 +167,18 @@ def main(root):
         return 1
     t = p.read_text(errors="surrogateescape")
     if MARK in t:
-        print("patch-apfs-size-probe: already applied")
-        return 0
-    if GETATTR_OLD not in t:
-        print("patch-apfs-size-probe: MISS: apfs_vnop_getattr is not the expected shape")
-        return 1
-    t = t.replace(GETATTR_OLD, GETATTR_NEW, 1)
-    p.write_text(t, errors="surrogateescape")
-    print("patch-apfs-size-probe: apfs_vnop_getattr panics with the size values")
-    return patch_exec(root)
+        print("patch-apfs-size-probe: apfs_vnop_getattr already has the probe")
+    else:
+        if GETATTR_OLD not in t:
+            print("patch-apfs-size-probe: MISS: apfs_vnop_getattr is not the expected shape")
+            return 1
+        t = t.replace(GETATTR_OLD, GETATTR_NEW, 1)
+        p.write_text(t, errors="surrogateescape")
+        print("patch-apfs-size-probe: apfs_vnop_getattr panics with the size values")
+    rc = patch_exec(root)
+    rc |= patch_vnode(root)
+    rc |= patch_mach(root)
+    return rc
 
 
 if __name__ == "__main__":
