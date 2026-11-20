@@ -72,7 +72,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.ccache
-          key: ccache-${{ github.run_id }}
+          key: ccache-${{ hashFiles('ci/**', 'lafa/**', '.github/workflows/build-kernel-bare.yml') }}
           restore-keys: |
             ccache-
       - name: point clang at ccache
@@ -366,6 +366,15 @@ jobs:
 
       # the object tree is cached now: patched sources get fresh mtimes, so make
       # rebuilds exactly the files the patches touched
+
+      # The object tree is restored only for the exact same patch set: every patch
+      # script, the lafa config and this workflow are part of the key, so a restored
+      # BUILD can never be stale (a prefix restore is deliberately not used).
+      - name: object tree cache (reuse the whole compile when the patch set is unchanged)
+        uses: actions/cache@v4
+        with:
+          path: hakios/xnu-src/xnu-8796.121.2/BUILD
+          key: xnuobj-${{ hashFiles('ci/**', 'lafa/**', '.github/workflows/build-kernel-bare.yml') }}
 
       - name: build kernel
         run: |
