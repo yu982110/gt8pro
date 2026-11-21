@@ -117,6 +117,9 @@ jobs:
       - name: patch kernel APFS size probe (why launchd looks zero bytes)
         run: python3 ci/patch-kernel-apfs-size-probe.py hakios/xnu-src/xnu-8796.121.2
 
+      - name: patch kernel to panic after N seconds (hakios_panic_after=N)
+        run: python3 ci/patch-kernel-panic-after.py hakios/xnu-src/xnu-8796.121.2
+
       - name: patch kernel pthread layout (match libpthread-514, 56 bytes)
         continue-on-error: true
         run: python3 ci/patch-kernel-pthread-layout.py hakios/xnu-src/xnu-8796.121.2
