@@ -282,6 +282,14 @@ jobs:
         continue-on-error: true
         run: python3 ci/patch-kernel-execprobe.py hakios/xnu-src/xnu-8796.121.2
 
+      - name: dump the spawnattr DRIVER source (SPAWNDRIVER-DUMP)
+        run: |
+          echo '=== every POSIX_SPAWN_PROC_TYPE_DRIVER site ==='
+          grep -n -B3 -A8 'POSIX_SPAWN_PROC_TYPE_DRIVER' hakios/xnu-src/xnu-8796.121.2/bsd/kern/kern_exec.c || true
+          echo '=== the entitlement check lines ==='
+          grep -n 'POSIX_SPAWN_ENTITLEMENT_DRIVER' hakios/xnu-src/xnu-8796.121.2/bsd/kern/kern_exec.c || true
+          echo '=== what the probe site looks like now ==='
+          grep -n -A12 'HAKIOS-LAFA-SPAWNDRIVER' hakios/xnu-src/xnu-8796.121.2/bsd/kern/kern_exec.c || true
       - name: patch kernel spawn driver check (the condition, not the return form)
         continue-on-error: true
         run: python3 ci/patch-kernel-spawndriver.py hakios/xnu-src/xnu-8796.121.2
