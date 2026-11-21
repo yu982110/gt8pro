@@ -116,9 +116,6 @@ jobs:
 
       # (probe patch removed: the header it printed is valid -- feedfacf/2/100000c/8 -- so it only
       #  stopped the boot; keep it for debugging with PROBE=1 by re-adding from git history)
-      - name: patch kernel GIC timer interrupt number (PPI 19, not 27)
-        run: python3 ci/patch-kernel-gic-timer-intid.py hakios/xnu-src/xnu-8796.121.2
-
       - name: patch kernel physmap alignment padding (the pager's pages must be mapped)
         run: python3 ci/patch-kernel-physmap-padding.py hakios/xnu-src/xnu-8796.121.2
 
