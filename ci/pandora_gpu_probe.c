@@ -436,6 +436,81 @@ gpu_level3(void)
 	}
 }
 
+/* ---- level 4a: the GPU firmware pack (PANDFW01) out of userdata --------------------------- */
+
+/*
+ * The reference port pins its firmware pack in memory and reads it with pandora_fw_read() from
+ * its sweet_ufs.c.  This port already has the same capability as an exported function:
+ * drivers/storage/hakios.ufs.c's hakios_ufs_read_partition(name, offset, dst, len, &bytes) reads
+ * bytes of a named partition through the loader's block page (it is what the modem's file systems
+ * use).  So the pack is simply written into userdata, well away from the image and the log
+ * regions, and read from there: no loader change and no new storage driver.
+ *
+ *   tools/fwpack-deploy.ps1  pushes artifacts/fwpack-gpu.img to userdata at 400 GiB
+ *   boot arg fwpack_mib=<MiB> moves it (argument is in MiB so it still fits an int)
+ */
+#define FW_PACK_DEFAULT_MIB  409600u             /* 400 GiB into userdata */
+
+struct pack_ent {
+	char name[48];
+	uint64_t off, size;
+};
+
+extern int hakios_ufs_read_partition(const char *name, uint64_t offset, uint8_t *dst,
+    uint64_t len, uint64_t *bytes);
+
+static void
+gpu_level4a(void)
+{
+	static uint8_t dir[4096];
+	static uint8_t head[64];
+	uint64_t part_bytes = 0;
+	/* 400 GiB into userdata; PE_parse_boot_argn cannot take a 64-bit value, so the override is
+	 * given in MiB (fwpack_mib=409600) and shifted here. */
+	uint32_t mib = FW_PACK_DEFAULT_MIB;
+	uint64_t off = (uint64_t)mib << 20;
+
+	if (PE_parse_boot_argn("fwpack_mib", &mib, sizeof(mib)) && mib != 0) {
+		off = (uint64_t)mib << 20;
+	}
+	int err = hakios_ufs_read_partition("userdata", off, dir, sizeof(dir), &part_bytes);
+	kprintf("PANDORA GPU: fwpack userdata+%u MiB -> read %d, partition %08x%08x bytes\n",
+	    (uint32_t)(off >> 20), err, (uint32_t)(part_bytes >> 32), (uint32_t)part_bytes);
+	if (err != 0) {
+		return;
+	}
+	if (memcmp(dir, "PANDFW01", 8) != 0) {
+		kprintf("PANDORA GPU: fwpack: no PANDFW01 magic, first bytes %02x %02x %02x %02x "
+		    "%02x %02x %02x %02x\n", dir[0], dir[1], dir[2], dir[3], dir[4], dir[5], dir[6],
+		    dir[7]);
+		return;
+	}
+	uint32_t n = 0;
+	memcpy(&n, dir + 8, 4);
+	kprintf("PANDORA GPU: fwpack has %u files\n", n);
+	uint64_t gmu_off = 0, gmu_size = 0;
+	for (uint32_t i = 0; i < n && i < 63; i++) {
+		struct pack_ent e;
+		memcpy(&e, dir + 16 + 64 * i, sizeof(e));
+		e.name[47] = 0;
+		kprintf("PANDORA GPU: fwpack[%u] %s off %08x%08x size %08x%08x\n", i, e.name,
+		    (uint32_t)(e.off >> 32), (uint32_t)e.off, (uint32_t)(e.size >> 32), (uint32_t)e.size);
+		if (strncmp(e.name, "gen80200_gmu.bin", 47) == 0) {
+			gmu_off = e.off;
+			gmu_size = e.size;
+		}
+	}
+	if (gmu_size == 0) {
+		kprintf("PANDORA GPU: fwpack has no gen80200_gmu.bin\n");
+		return;
+	}
+	/* the file itself: its first bytes, so a broken directory is not mistaken for a good one */
+	err = hakios_ufs_read_partition("userdata", off + gmu_off, head, sizeof(head), NULL);
+	kprintf("PANDORA GPU: gmu.bin read %d, size %08x%08x, first %02x %02x %02x %02x %02x %02x %02x %02x\n",
+	    err, (uint32_t)(gmu_size >> 32), (uint32_t)gmu_size, head[0], head[1], head[2], head[3],
+	    head[4], head[5], head[6], head[7]);
+}
+
 static void
 gpu_thread(void *arg, wait_result_t result)
 {
@@ -443,11 +518,15 @@ gpu_thread(void *arg, wait_result_t result)
 	(void)arg;
 	(void)result;
 	(void)PE_parse_boot_argn("pandora_gpu", &level, sizeof(level));
-	kprintf("PANDORA GPU: level %d (1 = read only, 3 = + GPLL0 vote and GPU_INIT_REGS)\n", level);
+	kprintf("PANDORA GPU: level %d (1 = read only, 3 = + GPLL0 vote and GPU_INIT_REGS, "
+	    "4 = + firmware pack)\n", level);
 	gpu_cmddb();
 	gpu_level1();
 	if (level >= 3) {
 		gpu_level3();
+	}
+	if (level >= 4) {
+		gpu_level4a();
 	}
 	kprintf("PANDORA GPU: done\n");
 	(void)thread_terminate(current_thread());
