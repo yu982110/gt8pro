@@ -357,12 +357,19 @@ def patch_size2(root):
 
 
 def main(root):
-    # HAKIOS-PROBE-OFF: the probe printed a VALID Mach-O header
-    # (feedfacf / 2 / 100000c / 0 / ncmds 8 / size 49152 / fs mockfs): the exec path is
-    # sound and the probe only stopped the boot, so it stays out of the way.  The body is
-    # kept as _probe_main() for when a probe is wanted again.
-    print("patch-apfs-size-probe: disabled (the Mach-O header is correct)")
-    return 0
+    # HAKIOS-PROBE-NOMACH: the kern_exec Mach-O panic is what stopped the boot, and the
+    # clean build without ANY probe then hung with not one byte of output -- so the rest of
+    # the probe set stays on (the APFS ones cannot fire on a RAM boot anyway) and only the
+    # known-good clean build keeps its address.  With hakios_panic_after=N the kernel hands
+    # its log over on purpose instead.
+    print("patch-apfs-size-probe: APFS probes on, kern_exec Mach-O panic off")
+    rc = 0
+    for fn in (patch_exec, patch_vnode, patch_inode, patch_rec, patch_read, patch_size2):
+        try:
+            rc |= fn(root)
+        except Exception as exc:  # a probe that cannot be placed must not stop the build
+            print("patch-apfs-size-probe: %s skipped: %s" % (fn.__name__, exc))
+    return rc
 
 
 def _probe_main(root):
