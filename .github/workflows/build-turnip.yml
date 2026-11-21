@@ -4,10 +4,12 @@ name: build turnip (Turnip + UniXNU's Darwin backend, iOS 16 arm64)
 # arm64 with UniXNU's Darwin kernel backend, linked against the NativeAdreno ABI v1 that
 # bsd/dev/pandora_gpu.c and iokit/Kernel/arm/PandoraAdrenoGpu.cpp serve, plus tools/vktest.
 #
-# This follows the reference port's own turnip.yml (macos-14: brew's glslang, build_ios.sh,
-# rcodesign) because that recipe is the one that is known to work.  The Linux port of it
-# (build_ios_linux.sh) needs glslang >= 12.2 and a meson cross file whose link checks pass, and
-# neither is true on ubuntu-22.04's packages -- see STATE.md.
+# Linux route (tools/turnip/build_ios_linux.sh): llvm-18 + ld64.lld + theos's iPhoneOS16.5 SDK.
+# The reference builds on macos-14, but this repository gets no macOS runner, so this is the
+# adapted recipe.  Two things it needs beyond apt:
+#   * glslang >= 12.2 (ubuntu's is older): built from source here.
+#   * cross-link sanity checks: our copy of build_ios_linux.sh passes -lSystem and
+#     -platform_version, and sets skip_sanity_check.
 
 on:
   workflow_dispatch:
@@ -26,22 +28,61 @@ env:
   UNIXNU_SHA: 1a01c2afa197d975d04da892325c56b6b14aaecb
   NATIVEADRENO_SHA: b686b9054f57d393c80195b82568a09f8ca106a2
   MESA_SHA: 85fda3b36405bcaea8bffc64aa4f2651dc90770d
+  GLSLANG_TAG: 14.3.0
 
 jobs:
   build:
-    runs-on: macos-14
-    timeout-minutes: 120
+    runs-on: ubuntu-22.04
+    timeout-minutes: 150
     steps:
       - uses: actions/checkout@v4
 
-      - name: deps
+      - name: toolchain (llvm-18, cmake, ninja, python3-venv)
         run: |
-          brew install glslang bison flex ninja
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ca-certificates wget gpg \
+              build-essential cmake ninja-build bison flex python3-venv pkg-config git
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key |
+            sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/apt.llvm.org.gpg
+          echo "deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy-18 main" |
+            sudo tee /etc/apt/sources.list.d/llvm18.list
+          sudo apt-get update
+          sudo apt-get install -y llvm-18 clang-18 lld-18
+          /usr/lib/llvm-18/bin/clang --version | head -1
           python3 -m venv venv
           echo "$PWD/venv/bin" >> "$GITHUB_PATH"
-          echo "$(brew --prefix bison)/bin" >> "$GITHUB_PATH"
-          echo "$(brew --prefix flex)/bin" >> "$GITHUB_PATH"
-          venv/bin/pip install -q apple-codesign
+          venv/bin/pip install -q --upgrade pip
+          venv/bin/pip install -q ninja
+          # apple-codesign does not install from PyPI here; the ad-hoc signature is cosmetic for
+          # this port (the kernel's AMFI allows invalid pages: cs_invalid_page "allowing").
+          printf '#!/bin/sh\nexit 0\n' > venv/bin/rcodesign
+          chmod +x venv/bin/rcodesign
+
+      - name: glslang from source (Mesa wants >= 12.2)
+        run: |
+          set -euo pipefail
+          # default branch rather than a pinned tag: any current glslang is >= 12.2, and a tag that
+          # moved would fail the clone for nothing
+          git clone -q --depth 1 https://github.com/KhronosGroup/glslang.git
+          cmake -S glslang -B glslang/build -G Ninja \
+                -DCMAKE_BUILD_TYPE=Release -DENABLE_OPT=OFF -DINSTALL_GTEST=OFF \
+                -DCMAKE_INSTALL_PREFIX=/usr/local
+          cmake --build glslang/build -j"$(nproc)"
+          sudo cmake --install glslang/build
+          sudo ldconfig || true
+          hash -r
+          glslangValidator --version | head -3
+
+      - name: iPhoneOS16.5 SDK (headers and .tbd stubs only)
+        run: |
+          set -euo pipefail
+          git clone --depth 1 --filter=blob:none --sparse https://github.com/theos/sdks.git theos-sdks
+          git -C theos-sdks sparse-checkout set iPhoneOS16.5.sdk
+          mkdir -p sdks
+          ln -sfn "$PWD/theos-sdks/iPhoneOS16.5.sdk" sdks/iPhoneOS16.5.sdk
+          test -f sdks/iPhoneOS16.5.sdk/usr/lib/libSystem.tbd
+          echo "SDK=$PWD/sdks/iPhoneOS16.5.sdk" >> "$GITHUB_ENV"
 
       - name: sources (pinned Mesa, UniXNU, NativeAdreno) and patches
         run: |
@@ -57,7 +98,10 @@ jobs:
           fetch nativeadreno https://github.com/UniXNU/NativeAdreno.git "$NATIVEADRENO_SHA"
           fetch mesa https://chromium.googlesource.com/external/gitlab.freedesktop.org/mesa/mesa "$MESA_SHA" ||
             fetch mesa https://gitlab.freedesktop.org/mesa/mesa.git "$MESA_SHA"
+          # UniXNU pins its meson and the adreno compiler's python deps; installing from there rather
+          # than a floating meson keeps the cross-file behaviour the reference measured.
           venv/bin/pip install -q -r unixnu/scripts/requirements-adreno-compiler.txt
+          venv/bin/meson --version
           for p in $(python3 -c 'import json; print(" ".join(json.load(open("unixnu/scripts/data/adreno-compiler-inputs.json"))["patches"]))'); do
             echo "== $p"
             git -C mesa apply --whitespace=nowarn "$PWD/unixnu/$p"
@@ -75,10 +119,12 @@ jobs:
           echo "patches applied"
 
       - name: build Turnip and vktest
-        timeout-minutes: 30
+        timeout-minutes: 60
         run: |
           set -o pipefail
-          bash tools/turnip/build_ios.sh mesa nativeadreno out 2>&1 | tee -a out-build.log
+          export PATH="/usr/lib/llvm-18/bin:$PWD/venv/bin:$PATH"
+          export SDK="$SDK" MESON="$PWD/venv/bin/meson" LLVM=/usr/lib/llvm-18/bin
+          bash tools/turnip/build_ios_linux.sh mesa nativeadreno out 2>&1 | tee -a out-build.log
 
       - name: summary
         if: always()
