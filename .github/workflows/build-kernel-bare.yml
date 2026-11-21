@@ -119,6 +119,9 @@ jobs:
       - name: patch kernel GIC timer interrupt number (PPI 19, not 27)
         run: python3 ci/patch-kernel-gic-timer-intid.py hakios/xnu-src/xnu-8796.121.2
 
+      - name: patch kernel physmap alignment padding (the pager's pages must be mapped)
+        run: python3 ci/patch-kernel-physmap-padding.py hakios/xnu-src/xnu-8796.121.2
+
       - name: patch kernel APFS size probe (why launchd looks zero bytes)
         run: python3 ci/patch-kernel-apfs-size-probe.py hakios/xnu-src/xnu-8796.121.2
 
