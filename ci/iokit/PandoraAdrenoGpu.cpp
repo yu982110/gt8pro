@@ -14,7 +14,7 @@
  * caller's pages (patch 0187).
  */
 #include <pexpert/arm64/board_config.h>
-#if defined(SWEET)
+#if 1
 #include <IOKit/IOService.h>
 #include <IOKit/IOUserClient.h>
 #include <IOKit/IOKitKeys.h>
