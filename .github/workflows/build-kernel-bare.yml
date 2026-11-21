@@ -1,4 +1,4 @@
-name: build lafa kernel BARE (framebuffer patch only)
+﻿name: build lafa kernel BARE (framebuffer patch only)
 
 "on":
   workflow_dispatch:
@@ -114,7 +114,10 @@ jobs:
       - name: patch kernel 4K pages
         run: python3 ci/patch-kernel-4k-pages.py hakios/xnu-src/xnu-8796.121.2
 
-      - name: patch kernel APFS size probe (why launchd looks zero bytes)
+      # (probe patch removed: the header it printed is valid -- feedfacf/2/100000c/8 -- so it only
+      #  stopped the boot; keep it for debugging with PROBE=1 by re-adding from git history)
+      - name: patch kernel APFS size probe (disabled: the Mach-O header is correct)
+        if: ${{ false }}
         run: python3 ci/patch-kernel-apfs-size-probe.py hakios/xnu-src/xnu-8796.121.2
 
       - name: patch kernel pthread layout (match libpthread-514, 56 bytes)
