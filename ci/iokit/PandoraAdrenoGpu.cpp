@@ -603,6 +603,9 @@ PandoraAdrenoGpu::newUserClient(task_t owningTask, void *securityID, UInt32 type
 class IOAcceleratorES : public IOService {
 	OSDeclareDefaultStructors(IOAcceleratorES);
 };
+/* This port does not build FuxiAdrenoUserClient.cpp, where the reference defines this
+ * class; without it AGXAccelerator's meta class has no super. */
+OSDefineMetaClassAndStructors(IOAcceleratorES, IOService);
 
 class AGXAccelerator : public IOAcceleratorES {
 	OSDeclareDefaultStructors(AGXAccelerator);
