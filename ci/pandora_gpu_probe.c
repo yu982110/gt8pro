@@ -180,6 +180,48 @@ gpu_dump(vm_offset_t b, uint32_t first, uint32_t end, const char *name)
 	}
 }
 
+
+/* HAKIOS-GPU-CC-POWER: our phone has the GPU fully down when fastboot hands over, so the
+ * first GPUCC read stalls the bus (the same-SoC port's level-2 patch says "fastboot leaves
+ * the CX GDSC collapsed").  Power the CX side first, then read.  Written blind because the
+ * read is what hangs: SW_COLLAPSE cleared, the three RETAINs set, and the reserved bits left
+ * as the hardware wants them. */
+static void
+gpu_wr(vm_offset_t b, uint32_t o, uint32_t v)
+{
+	__asm__ volatile ("dmb oshst" ::: "memory");
+	*(volatile uint32_t *)(b + o) = v;
+	__asm__ volatile ("dsb osh" ::: "memory");
+}
+
+static uint32_t
+gpu_poll(vm_offset_t b, uint32_t o, uint32_t mask, uint32_t want, unsigned us, bool *ok)
+{
+	uint32_t v = gpu_rd(b, o);
+	for (unsigned t = 0; (v & mask) != want && t < us; t += 10) {
+		delay(10);
+		v = gpu_rd(b, o);
+	}
+	*ok = (v & mask) == want;
+	return v;
+}
+
+/* Enable a branch clock (CBCR bit 0) and wait for CLK_OFF to clear. */
+static bool
+gpu_branch_on(vm_offset_t cc, uint32_t cbcr, const char *name)
+{
+	bool ok;
+	uint32_t v = gpu_rd(cc, cbcr);
+	if (!(v & CBCR_CLK_OFF)) {
+		printf("PANDORA GPU: %s already running (%08x)\n", name, v);
+		return true;
+	}
+	gpu_wr(cc, cbcr, v | CBCR_CLK_ENABLE);
+	v = gpu_poll(cc, cbcr, CBCR_CLK_OFF, 0, 500, &ok);
+	printf("PANDORA GPU: %s on: %08x %s\n", name, v, ok ? "running" : "STILL OFF");
+	return ok;
+}
+
 static void
 gpu_level1(void)
 {
@@ -199,13 +241,29 @@ gpu_level1(void)
 		return;
 	}
 
-	/* GPUCC. */
-	gpu_step("GPUCC");
+	/* GPUCC: map first (marker), power the CX side, only then read. */
+	gpu_step("GPUCC map");
 	vm_offset_t cc = ml_io_map(GPUCC_PA, GPUCC_SIZE);
 	if (!cc) {
 		printf("PANDORA GPU: GPUCC not mapped\n");
 		return;
 	}
+	printf("PANDORA GPU: GPUCC mapped at %lx (pa %x size %x)\n",
+	    (unsigned long)cc, (unsigned)GPUCC_PA, (unsigned)GPUCC_SIZE);
+	gpu_step("CX GDSC on (blind write, SW_COLLAPSE cleared)");
+	gpu_wr(cc, GPUCC_CX_GDSCR, (1u << 16) | (1u << 17) | (1u << 20));
+	{
+		bool pok;
+		uint32_t hw = gpu_poll(cc, GPUCC_CX_GDS_HW, GDSCR_PWR_ON, GDSCR_PWR_ON, 1000, &pok);
+		printf("PANDORA GPU: CX GDSC after write: gdscr %08x hw %08x %s\n",
+		    gpu_rd(cc, GPUCC_CX_GDSCR), hw, pok ? "on" : "DID NOT TURN ON");
+		if (!pok) {
+			return;
+		}
+	}
+	gpu_step("CX clocks on (gpu_cc_ahb, SMMU vote)");
+	(void)gpu_branch_on(cc, GPUCC_AHB, "gpu_cc_ahb");
+	(void)gpu_branch_on(cc, GPUCC_SMMU_VOTE, "SMMU vote clock");
 	uint32_t gdscr = gpu_rd(cc, GPUCC_CX_GDSCR), smmu_vote = gpu_rd(cc, GPUCC_SMMU_VOTE);
 	uint32_t ahb = gpu_rd(cc, GPUCC_AHB), cx_gmu = gpu_rd(cc, GPUCC_CX_GMU);
 	printf("PANDORA GPU: GPUCC cx_gdscr %08x hw %08x ahb %08x cx_gmu %08x cxo %08x hub_cx_int %08x "
