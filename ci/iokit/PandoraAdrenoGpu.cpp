@@ -492,10 +492,10 @@ PandoraAdrenoGpu::startInterrupt(void)
 	/* This service matches on IOResources and can start before the platform expert has made the GIC
 	 * controller and the /arm-io nubs: wait for both (they come within the first second). */
 	OSDictionary *want = IOService::serviceMatching("SweetGIC");
-	IOService *gic = want == nullptr ? nullptr : IOService::waitForMatchingService(want, 10ull * NSEC_PER_SEC);
+	IOService *gic = want == nullptr ? nullptr : IOService::waitForMatchingService(want, 0);
 	OSSafeReleaseNULL(want);
 	want = IOService::nameMatching("gpu");
-	IOService *nub = want == nullptr ? nullptr : IOService::waitForMatchingService(want, 10ull * NSEC_PER_SEC);
+	IOService *nub = want == nullptr ? nullptr : IOService::waitForMatchingService(want, 0);
 	OSSafeReleaseNULL(want);
 	OSSafeReleaseNULL(gic);
 	IORegistryEntry *node = nub;   /* released below */
