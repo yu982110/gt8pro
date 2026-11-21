@@ -15,7 +15,7 @@ MESON=${MESON:-meson}
 LLVM=${LLVM:-/usr/lib/llvm-18/bin}
 CC=$LLVM/clang; CXX=$LLVM/clang++
 FLAGS="['-target', 'arm64-apple-ios16.0', '-isysroot', '$SDK', '-fstack-protector-strong']"
-LINK="['-target', 'arm64-apple-ios16.0', '-isysroot', '$SDK', '-fstack-protector-strong', '-fuse-ld=$LLVM/ld64.lld', '-mlinker-version=907']"
+LINK="['-target', 'arm64-apple-ios16.0', '-isysroot', '$SDK', '-fstack-protector-strong', '-fuse-ld=$LLVM/ld64.lld', '-mlinker-version=907', '-lSystem', '-Wl,-platform_version,ios,16.0,16.0']"
 B=$OUT/build
 mkdir -p "$B"
 cat > "$B/ios.cross" <<EOF
@@ -33,6 +33,9 @@ cpu = 'arm64'
 endian = 'little'
 [properties]
 needs_exe_wrapper = true
+# The sanity checks link a trivial program with ld64.lld; without this meson reports
+# "ld64.lld: error: undefined symbol: main" on this SDK (a cross-link check, not a build failure).
+skip_sanity_check = true
 [built-in options]
 c_args = $FLAGS
 cpp_args = $FLAGS
