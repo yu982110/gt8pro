@@ -116,8 +116,7 @@ jobs:
 
       # (probe patch removed: the header it printed is valid -- feedfacf/2/100000c/8 -- so it only
       #  stopped the boot; keep it for debugging with PROBE=1 by re-adding from git history)
-      - name: patch kernel APFS size probe (disabled: the Mach-O header is correct)
-        if: ${{ false }}
+      - name: patch kernel APFS size probe (why launchd looks zero bytes)
         run: python3 ci/patch-kernel-apfs-size-probe.py hakios/xnu-src/xnu-8796.121.2
 
       - name: patch kernel to drop mach_assert (assertions off, debugging kept)
