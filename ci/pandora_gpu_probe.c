@@ -337,6 +337,105 @@ gpu_level1(void)
 	    gpu_rd(gmu, 0x03d50000u + 0x101u * 4 - GMU_PA), gpu_rd(gmu, 0x03d9e000u + 0x39u * 4 - GMU_PA));
 }
 
+/* ---- level 3: the GPLL0 votes and SCM GPU_INIT_REGS -------------------------------------- */
+
+#define SCM_FN(svc, cmd)  ((1ULL << 30) | (2ULL << 24) | (((uint64_t)(svc) & 0xffu) << 8) | ((cmd) & 0xffu))
+#define SCM_ARGS(n)       ((uint64_t)(n) & 0xfu)
+#define SCM_SVC_INFO      0x06u
+#define SCM_INFO_AVAIL    0x01u        /* is_call_available */
+#define SCM_SVC_GPU       0x28u
+#define SCM_GPU_INIT_REGS 0x01u
+#define GPU_ALWAYS_EN_REQ (1u << 0)
+#define GPU_TSENSE_EN_REQ (1u << 3)
+
+/*
+ * The reference port reaches the secure monitor through its adsp driver's scm_smc().  This port
+ * has no SCM helper in the kernel at all (checked against the symbol table: no scm_smc, no
+ * qcom_scm_*), so the call is made here the way loader.c makes its own (smc_call): raw
+ * "smc #0", function in x0, argument info in x1, arguments in x2/x3, results read back from
+ * x0..x3.  No pSCI/hvc fallback is tried first: if the conduit is wrong the call comes back with
+ * a negative status and nothing else happens, which is exactly what this level is for.
+ */
+static uint64_t
+gpu_scm(uint64_t fn, uint64_t arginfo, uint64_t x2, uint64_t x3, uint64_t *r1, uint64_t *r2)
+{
+	register uint64_t x0 __asm__("x0") = fn;
+	register uint64_t x1 __asm__("x1") = arginfo;
+	register uint64_t x2r __asm__("x2") = x2;
+	register uint64_t x3r __asm__("x3") = x3;
+
+	__asm__ volatile ("smc #0"
+	    : "+r" (x0), "+r" (x1), "+r" (x2r), "+r" (x3r)
+	    : : "x4", "x5", "x6", "x7", "x8", "x9", "x10", "x11", "x12", "x13", "x14", "x15",
+	        "x16", "x17", "memory");
+	if (r1 != NULL) {
+		*r1 = x1;
+	}
+	if (r2 != NULL) {
+		*r2 = x2r;
+	}
+	return x0;
+}
+
+static void
+gpu_level3(void)
+{
+	vm_offset_t cc = gpu_map(GPUCC_PA, GPUCC_SIZE);
+	vm_offset_t gcc52 = gpu_map(GCC_PA + GCC_GPLL0_VOTE, 0x1000);
+	if (!cc || !gcc52) {
+		kprintf("PANDORA GPU: level 3: a window did not map\n");
+		return;
+	}
+	if (!(gpu_rd(cc, GPUCC_CX_GDSCR) & GDSCR_PWR_ON)) {
+		kprintf("PANDORA GPU: level 3 skipped, CX is off\n");
+		return;
+	}
+
+	/* Linux's gcc-kaanapali.c: the GPU's GPLL0 votes are the two bits in 0x52000. */
+	gpu_step("GPLL0 votes for the GPU (GCC 0x52000 bits 15/16)");
+	uint32_t v = gpu_rd(gcc52, 0);
+	gpu_wr(gcc52, 0, v | (1u << 15) | (1u << 16));
+	delay(50);
+	kprintf("PANDORA GPU: gpll0_vote %08x -> %08x\n", v, gpu_rd(gcc52, 0));
+
+	/* Ask the secure monitor whether the GPU call exists before making it (svc 6, cmd 1). */
+	uint64_t avail = 0, extra = 0;
+	uint64_t id = (2ULL << 24) | ((uint64_t)SCM_SVC_GPU << 8) | SCM_GPU_INIT_REGS;
+	gpu_step("SCM is_call_available(gpu, GPU_INIT_REGS)");
+	avail = gpu_scm(SCM_FN(SCM_SVC_INFO, SCM_INFO_AVAIL), SCM_ARGS(1), id, 0, &extra, NULL);
+	kprintf("PANDORA GPU: SCM is_call_available -> status %08x%08x info %08x%08x %s\n",
+	    (uint32_t)(avail >> 32), (uint32_t)avail, (uint32_t)(extra >> 32), (uint32_t)extra,
+	    (avail == 0 && extra != 0) ? "call exists" : "not available / conduit wrong");
+
+	/* GPU_INIT_REGS: ALWAYS_EN | TSENSE_EN, the argument the reference port passes. */
+	gpu_step("SCM GPU_INIT_REGS (ALWAYS_EN | TSENSE_EN)");
+	uint64_t st = 0, st1 = 0;
+	st = gpu_scm(SCM_FN(SCM_SVC_GPU, SCM_GPU_INIT_REGS), SCM_ARGS(1),
+	    (uint64_t)(GPU_ALWAYS_EN_REQ | GPU_TSENSE_EN_REQ), 0, &st1, NULL);
+	kprintf("PANDORA GPU: SCM GPU_INIT_REGS(%#x) -> status %08x%08x info %08x%08x %s\n",
+	    GPU_ALWAYS_EN_REQ | GPU_TSENSE_EN_REQ, (uint32_t)(st >> 32), (uint32_t)st,
+	    (uint32_t)(st1 >> 32), (uint32_t)st1, st == 0 ? "ok" : "FAILED");
+
+	/* Re-read what the plan says to check: GMU still held, no reset, HFI quiet, TCM_RET 0. */
+	kprintf("PANDORA GPU: GPUCC after: cx_gdscr %08x hw %08x smmu_vote %08x cx_gmu %08x\n",
+	    gpu_rd(cc, GPUCC_CX_GDSCR), gpu_rd(cc, GPUCC_CX_GDS_HW), gpu_rd(cc, GPUCC_SMMU_VOTE),
+	    gpu_rd(cc, GPUCC_CX_GMU));
+	vm_offset_t gmu = gpu_map(GMU_PA, GMU_SIZE);
+	if (gmu != 0) {
+		kprintf("PANDORA GPU: GMU after: cm3_sysreset %08x fw_init_result %08x "
+		    "hfi_ctrl_status %08x gfx_pwr_clk_status %08x rpmh_power_state %08x "
+		    "ao_host_irq %08x\n", gpu_rd(gmu, GMU_REG(0x1f800)),
+		    gpu_rd(gmu, GMU_REG(0x1f81c)), gpu_rd(gmu, GMU_REG(0x1f980)),
+		    gpu_rd(gmu, GMU_REG(0x1f7e8)), gpu_rd(gmu, GMU_REG(0x1f7e9)),
+		    gpu_rd(gmu, GMU_REG(0x23b05)));
+		kprintf("PANDORA GPU: RSCC status %08x CX_MISC tcm_ret %08x\n",
+		    gpu_rd(gmu, 0x03d50000u + 0x101u * 4 - GMU_PA),
+		    gpu_rd(gmu, 0x03d9e000u + 0x39u * 4 - GMU_PA));
+	} else {
+		kprintf("PANDORA GPU: GMU window not mapped after SCM\n");
+	}
+}
+
 static void
 gpu_thread(void *arg, wait_result_t result)
 {
@@ -344,9 +443,12 @@ gpu_thread(void *arg, wait_result_t result)
 	(void)arg;
 	(void)result;
 	(void)PE_parse_boot_argn("pandora_gpu", &level, sizeof(level));
-	kprintf("PANDORA GPU: level %d (1 = read only)\n", level);
+	kprintf("PANDORA GPU: level %d (1 = read only, 3 = + GPLL0 vote and GPU_INIT_REGS)\n", level);
 	gpu_cmddb();
 	gpu_level1();
+	if (level >= 3) {
+		gpu_level3();
+	}
 	kprintf("PANDORA GPU: done\n");
 	(void)thread_terminate(current_thread());
 	thread_block(THREAD_CONTINUE_NULL);
