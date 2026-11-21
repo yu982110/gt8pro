@@ -104,7 +104,7 @@ gpu_rd(vm_offset_t b, uint32_t o)
 static void
 gpu_step(const char *what)
 {
-	printf("PANDORA GPU: next: %s\n", what);
+	kprintf("PANDORA GPU: next: %s\n", what);
 	gpu_sleep(800);
 }
 
@@ -153,13 +153,13 @@ gpu_cmddb(void)
 	};
 	gpu_db = gpu_map(CMDDB_PA, CMDDB_SIZE);
 	if (!gpu_db) {
-		printf("PANDORA GPU: cmd-db not mapped\n");
+		kprintf("PANDORA GPU: cmd-db not mapped\n");
 		return;
 	}
 	for (unsigned i = 0; i < sizeof(res) / sizeof(res[0]); i++) {
 		uint32_t addr, aux, auxlen;
 		if (cmddb_find(res[i], &addr, &aux, &auxlen)) {
-			printf("PANDORA GPU: cmd-db %s: not found\n", res[i]);
+			kprintf("PANDORA GPU: cmd-db %s: not found\n", res[i]);
 			continue;
 		}
 		char line[160];
@@ -168,7 +168,7 @@ gpu_cmddb(void)
 		for (uint32_t k = 0; k + 2 <= auxlen && k < 32 && n > 0 && (size_t)n < sizeof(line) - 6; k += 2) {
 			n += snprintf(line + n, sizeof(line) - (size_t)n, " %x", db16(aux + k));
 		}
-		printf("%s\n", line);
+		kprintf("%s\n", line);
 	}
 }
 
@@ -185,7 +185,7 @@ gpu_dump(vm_offset_t b, uint32_t first, uint32_t end, const char *name)
 			any |= v[k] != 0;
 		}
 		if (any) {
-			printf("PANDORA GPU: %s %04x: %08x %08x %08x %08x %08x %08x %08x %08x\n", name, o,
+			kprintf("PANDORA GPU: %s %04x: %08x %08x %08x %08x %08x %08x %08x %08x\n", name, o,
 			    v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7]);
 		}
 	}
@@ -224,12 +224,12 @@ gpu_branch_on(vm_offset_t cc, uint32_t cbcr, const char *name)
 	bool ok;
 	uint32_t v = gpu_rd(cc, cbcr);
 	if (!(v & CBCR_CLK_OFF)) {
-		printf("PANDORA GPU: %s already running (%08x)\n", name, v);
+		kprintf("PANDORA GPU: %s already running (%08x)\n", name, v);
 		return true;
 	}
 	gpu_wr(cc, cbcr, v | CBCR_CLK_ENABLE);
 	v = gpu_poll(cc, cbcr, CBCR_CLK_OFF, 0, 500, &ok);
-	printf("PANDORA GPU: %s on: %08x %s\n", name, v, ok ? "running" : "STILL OFF");
+	kprintf("PANDORA GPU: %s on: %08x %s\n", name, v, ok ? "running" : "STILL OFF");
 	return ok;
 }
 
@@ -240,15 +240,15 @@ gpu_level1(void)
 	vm_offset_t gcc71 = gpu_map(GCC_PA + GCC_GPU_CFG_AHB - 0x4u, 0x1000);
 	vm_offset_t gcc52 = gpu_map(GCC_PA + GCC_GPLL0_VOTE, 0x1000);
 	if (!gcc71 || !gcc52) {
-		printf("PANDORA GPU: GCC not mapped\n");
+		kprintf("PANDORA GPU: GCC not mapped\n");
 		return;
 	}
 	uint32_t cfg_ahb = gpu_rd(gcc71, 4), gemnoc = gpu_rd(gcc71, GCC_GEMNOC_GFX - GCC_GPU_CFG_AHB + 4);
 	uint32_t gpll0 = gpu_rd(gcc52, 0);
-	printf("PANDORA GPU: GCC gpu_cfg_ahb %08x gemnoc_gfx %08x gpll0_vote %08x (gpu bits %u%u)\n",
+	kprintf("PANDORA GPU: GCC gpu_cfg_ahb %08x gemnoc_gfx %08x gpll0_vote %08x (gpu bits %u%u)\n",
 	    cfg_ahb, gemnoc, gpll0, (gpll0 >> 16) & 1, (gpll0 >> 15) & 1);
 	if (!(cfg_ahb & CBCR_CLK_ENABLE)) {
-		printf("PANDORA GPU: gpu_cfg_ahb not enabled: GPUCC not read\n");
+		kprintf("PANDORA GPU: gpu_cfg_ahb not enabled: GPUCC not read\n");
 		return;
 	}
 
@@ -256,17 +256,17 @@ gpu_level1(void)
 	gpu_step("GPUCC map");
 	vm_offset_t cc = gpu_map(GPUCC_PA, GPUCC_SIZE);
 	if (!cc) {
-		printf("PANDORA GPU: GPUCC not mapped\n");
+		kprintf("PANDORA GPU: GPUCC not mapped\n");
 		return;
 	}
-	printf("PANDORA GPU: GPUCC mapped at %lx (pa %x size %x)\n",
+	kprintf("PANDORA GPU: GPUCC mapped at %lx (pa %x size %x)\n",
 	    (unsigned long)cc, (unsigned)GPUCC_PA, (unsigned)GPUCC_SIZE);
 	gpu_step("CX GDSC on (blind write, SW_COLLAPSE cleared)");
 	gpu_wr(cc, GPUCC_CX_GDSCR, (1u << 16) | (1u << 17) | (1u << 20));
 	{
 		bool pok;
 		uint32_t hw = gpu_poll(cc, GPUCC_CX_GDS_HW, GDSCR_PWR_ON, GDSCR_PWR_ON, 1000, &pok);
-		printf("PANDORA GPU: CX GDSC after write: gdscr %08x hw %08x %s\n",
+		kprintf("PANDORA GPU: CX GDSC after write: gdscr %08x hw %08x %s\n",
 		    gpu_rd(cc, GPUCC_CX_GDSCR), hw, pok ? "on" : "DID NOT TURN ON");
 		if (!pok) {
 			return;
@@ -277,10 +277,10 @@ gpu_level1(void)
 	(void)gpu_branch_on(cc, GPUCC_SMMU_VOTE, "SMMU vote clock");
 	uint32_t gdscr = gpu_rd(cc, GPUCC_CX_GDSCR), smmu_vote = gpu_rd(cc, GPUCC_SMMU_VOTE);
 	uint32_t ahb = gpu_rd(cc, GPUCC_AHB), cx_gmu = gpu_rd(cc, GPUCC_CX_GMU);
-	printf("PANDORA GPU: GPUCC cx_gdscr %08x hw %08x ahb %08x cx_gmu %08x cxo %08x hub_cx_int %08x "
+	kprintf("PANDORA GPU: GPUCC cx_gdscr %08x hw %08x ahb %08x cx_gmu %08x cxo %08x hub_cx_int %08x "
 	    "smmu_vote %08x\n", gdscr, gpu_rd(cc, GPUCC_CX_GDS_HW), ahb, cx_gmu, gpu_rd(cc, GPUCC_CXO),
 	    gpu_rd(cc, GPUCC_HUB_CX_INT), smmu_vote);
-	printf("PANDORA GPU: GPUCC gmu_rcg %08x %08x hub_rcg %08x %08x\n", gpu_rd(cc, GPUCC_GMU_RCG),
+	kprintf("PANDORA GPU: GPUCC gmu_rcg %08x %08x hub_rcg %08x %08x\n", gpu_rd(cc, GPUCC_GMU_RCG),
 	    gpu_rd(cc, GPUCC_GMU_RCG + 4), gpu_rd(cc, GPUCC_HUB_RCG), gpu_rd(cc, GPUCC_HUB_RCG + 4));
 	gpu_dump(cc, GPUCC_PLL0, GPUCC_PLL0 + 0x40, "GPUCC pll0");
 	gpu_dump(cc, GPUCC_SCAN_FIRST, GPUCC_SCAN_END, "GPUCC");
@@ -288,14 +288,14 @@ gpu_level1(void)
 
 	/* GPU SMMU, GR0 page, one stream-match entry at a time. */
 	if (!cx_on || (smmu_vote & CBCR_CLK_OFF)) {
-		printf("PANDORA GPU: CX %s, SMMU vote clock %s: SMMU not read\n", cx_on ? "on" : "off",
+		kprintf("PANDORA GPU: CX %s, SMMU vote clock %s: SMMU not read\n", cx_on ? "on" : "off",
 		    (smmu_vote & CBCR_CLK_OFF) ? "off" : "on");
 	} else {
 		gpu_step("GPU SMMU GR0 ID registers");
 		vm_offset_t smmu = gpu_map(SMMU_PA, 0x1000);
 		uint32_t id0 = smmu ? gpu_rd(smmu, SMMU_ID0) : 0;
 		if (smmu) {
-			printf("PANDORA GPU: SMMU sCR0 %08x ID0 %08x ID1 %08x ID2 %08x sGFSR %08x\n",
+			kprintf("PANDORA GPU: SMMU sCR0 %08x ID0 %08x ID1 %08x ID2 %08x sGFSR %08x\n",
 			    gpu_rd(smmu, SMMU_SCR0), id0, gpu_rd(smmu, SMMU_ID1), gpu_rd(smmu, SMMU_ID2),
 			    gpu_rd(smmu, SMMU_SGFSR));
 			unsigned nsmr = MIN(id0 & 0xffu, 128u), valid = 0;
@@ -309,31 +309,31 @@ gpu_level1(void)
 				uint32_t s2cr = gpu_rd(smmu, SMMU_S2CR(i));
 				if (smr & (1u << 31)) {
 					valid++;
-					printf("PANDORA GPU: SMMU SMR[%u] %08x (id %#x mask %#x) S2CR %08x\n", i, smr,
+					kprintf("PANDORA GPU: SMMU SMR[%u] %08x (id %#x mask %#x) S2CR %08x\n", i, smr,
 					    smr & 0xffffu, (smr >> 16) & 0x7fffu, s2cr);
 				}
 			}
-			printf("PANDORA GPU: SMMU %u of %u stream-match entries valid\n", valid, nsmr);
+			kprintf("PANDORA GPU: SMMU %u of %u stream-match entries valid\n", valid, nsmr);
 		}
 	}
 
 	/* GMU state. */
 	if (!cx_on || (ahb & CBCR_CLK_OFF) || (cx_gmu & CBCR_CLK_OFF)) {
-		printf("PANDORA GPU: CX %s, gpu_cc_ahb %s, cx_gmu %s: GMU not read\n", cx_on ? "on" : "off",
+		kprintf("PANDORA GPU: CX %s, gpu_cc_ahb %s, cx_gmu %s: GMU not read\n", cx_on ? "on" : "off",
 		    (ahb & CBCR_CLK_OFF) ? "off" : "on", (cx_gmu & CBCR_CLK_OFF) ? "off" : "on");
 		return;
 	}
 	gpu_step("GMU state registers");
 	vm_offset_t gmu = gpu_map(GMU_PA, GMU_SIZE);
 	if (!gmu) {
-		printf("PANDORA GPU: GMU window not mapped\n");
+		kprintf("PANDORA GPU: GMU window not mapped\n");
 		return;
 	}
-	printf("PANDORA GPU: GMU cm3_sysreset %08x fw_init_result %08x hfi_ctrl_status %08x "
+	kprintf("PANDORA GPU: GMU cm3_sysreset %08x fw_init_result %08x hfi_ctrl_status %08x "
 	    "gfx_pwr_clk_status %08x rpmh_power_state %08x ao_host_irq %08x\n",
 	    gpu_rd(gmu, GMU_REG(0x1f800)), gpu_rd(gmu, GMU_REG(0x1f81c)), gpu_rd(gmu, GMU_REG(0x1f980)),
 	    gpu_rd(gmu, GMU_REG(0x1f7e8)), gpu_rd(gmu, GMU_REG(0x1f7e9)), gpu_rd(gmu, GMU_REG(0x23b05)));
-	printf("PANDORA GPU: RSCC status %08x CX_MISC tcm_ret %08x\n",
+	kprintf("PANDORA GPU: RSCC status %08x CX_MISC tcm_ret %08x\n",
 	    gpu_rd(gmu, 0x03d50000u + 0x101u * 4 - GMU_PA), gpu_rd(gmu, 0x03d9e000u + 0x39u * 4 - GMU_PA));
 }
 
@@ -344,10 +344,10 @@ gpu_thread(void *arg, wait_result_t result)
 	(void)arg;
 	(void)result;
 	(void)PE_parse_boot_argn("pandora_gpu", &level, sizeof(level));
-	printf("PANDORA GPU: level %d (1 = read only)\n", level);
+	kprintf("PANDORA GPU: level %d (1 = read only)\n", level);
 	gpu_cmddb();
 	gpu_level1();
-	printf("PANDORA GPU: done\n");
+	kprintf("PANDORA GPU: done\n");
 	(void)thread_terminate(current_thread());
 	thread_block(THREAD_CONTINUE_NULL);
 }
@@ -366,21 +366,21 @@ pandora_gpu_init(void)
 	 * to say why, or a whole boot cycle is wasted: how the boot argument parsed, and what the
 	 * kernel's own copy of the string looks like from inside.
 	 */
-	printf("PANDORA GPU: init parsed %d level %d\n", parsed, level);
+	kprintf("PANDORA GPU: init parsed %d level %d\n", parsed, level);
 	if (args != NULL) {
-		printf("PANDORA GPU: args <%s>\n", args);
+		kprintf("PANDORA GPU: args <%s>\n", args);
 	} else {
-		printf("PANDORA GPU: args NULL\n");
+		kprintf("PANDORA GPU: args NULL\n");
 	}
 	if (level <= 0) {
-		printf("PANDORA GPU: boot-arg pandora_gpu missing or 0, probe idle\n");
+		kprintf("PANDORA GPU: boot-arg pandora_gpu missing or 0, probe idle\n");
 		return;
 	}
 	if (kernel_thread_start(gpu_thread, NULL, &thread) == KERN_SUCCESS) {
-		printf("PANDORA GPU: probe thread started\n");
+		kprintf("PANDORA GPU: probe thread started\n");
 		thread_deallocate(thread);
 	} else {
-		printf("PANDORA GPU: kernel_thread_start FAILED\n");
+		kprintf("PANDORA GPU: kernel_thread_start FAILED\n");
 	}
 }
 #endif /* PANDORA */
