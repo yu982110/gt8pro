@@ -24,9 +24,21 @@
 #include <kern/thread.h>
 #include <kern/sched_prim.h>
 #include <pexpert/pexpert.h>
+#include <vm/vm_map.h>
+#include <arm/machine_routines.h>   /* ml_io_map_* and VM_WIMG_* */
+
+/*
+ * HAKIOS-GPU-UNMAPPABLE: gpu_map() only covers the 8 MB io_submap, and GPUCC at 0x3d90000
+ * is far outside it -- the map call never returns (the reference port hit the same thing and
+ * switched these windows to ml_io_map_unmappable in patch 0180).  This port's own lafa-fb
+ * driver already maps 0xfc800000 this way, so use the same call.
+ */
+extern vm_offset_t ml_io_map_unmappable(vm_offset_t phys_addr, vm_size_t size, uint32_t wimg);
+#define gpu_map(pa, len) ml_io_map_unmappable((vm_offset_t)(pa), (vm_size_t)(len), VM_WIMG_IO)
+/* HAKIOS-GPU-UNMAPPABLE */
 
 extern kern_return_t thread_terminate(thread_t);
-extern vm_offset_t ml_io_map(vm_offset_t, vm_size_t);
+extern vm_offset_t gpu_map(vm_offset_t, vm_size_t);
 void pandora_gpu_init(void);
 
 #define GCC_PA            0x00100000u
@@ -140,7 +152,7 @@ gpu_cmddb(void)
 	static const char *const res[] = {
 		"gfx.lvl", "mx.lvl", "cx.lvl", "gmxc.lvl", "mxc.lvl", "SH0", "MC0", "ACV", "CN0",
 	};
-	gpu_db = ml_io_map(CMDDB_PA, CMDDB_SIZE);
+	gpu_db = gpu_map(CMDDB_PA, CMDDB_SIZE);
 	if (!gpu_db) {
 		printf("PANDORA GPU: cmd-db not mapped\n");
 		return;
@@ -226,8 +238,8 @@ static void
 gpu_level1(void)
 {
 	/* GCC: always on. */
-	vm_offset_t gcc71 = ml_io_map(GCC_PA + GCC_GPU_CFG_AHB - 0x4u, 0x1000);
-	vm_offset_t gcc52 = ml_io_map(GCC_PA + GCC_GPLL0_VOTE, 0x1000);
+	vm_offset_t gcc71 = gpu_map(GCC_PA + GCC_GPU_CFG_AHB - 0x4u, 0x1000);
+	vm_offset_t gcc52 = gpu_map(GCC_PA + GCC_GPLL0_VOTE, 0x1000);
 	if (!gcc71 || !gcc52) {
 		printf("PANDORA GPU: GCC not mapped\n");
 		return;
@@ -243,7 +255,7 @@ gpu_level1(void)
 
 	/* GPUCC: map first (marker), power the CX side, only then read. */
 	gpu_step("GPUCC map");
-	vm_offset_t cc = ml_io_map(GPUCC_PA, GPUCC_SIZE);
+	vm_offset_t cc = gpu_map(GPUCC_PA, GPUCC_SIZE);
 	if (!cc) {
 		printf("PANDORA GPU: GPUCC not mapped\n");
 		return;
@@ -281,7 +293,7 @@ gpu_level1(void)
 		    (smmu_vote & CBCR_CLK_OFF) ? "off" : "on");
 	} else {
 		gpu_step("GPU SMMU GR0 ID registers");
-		vm_offset_t smmu = ml_io_map(SMMU_PA, 0x1000);
+		vm_offset_t smmu = gpu_map(SMMU_PA, 0x1000);
 		uint32_t id0 = smmu ? gpu_rd(smmu, SMMU_ID0) : 0;
 		if (smmu) {
 			printf("PANDORA GPU: SMMU sCR0 %08x ID0 %08x ID1 %08x ID2 %08x sGFSR %08x\n",
@@ -313,7 +325,7 @@ gpu_level1(void)
 		return;
 	}
 	gpu_step("GMU state registers");
-	vm_offset_t gmu = ml_io_map(GMU_PA, GMU_SIZE);
+	vm_offset_t gmu = gpu_map(GMU_PA, GMU_SIZE);
 	if (!gmu) {
 		printf("PANDORA GPU: GMU window not mapped\n");
 		return;
