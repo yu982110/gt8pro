@@ -275,6 +275,12 @@ jobs:
       - name: patch kernel ticker (a heartbeat that does not use the console)
         run: python3 ci/patch-kernel-ticker.py hakios/xnu-src/xnu-8796.121.2
 
+      - name: patch kernel serial_init returns at once (get past arm_init L529)
+        run: python3 ci/patch-kernel-noserial-init.py hakios/xnu-src/xnu-8796.121.2
+
+      - name: patch kernel boot-stage marks (one word the loader reads)
+        run: python3 ci/patch-kernel-boot-stage.py hakios/xnu-src/xnu-8796.121.2
+
       - name: patch kernel noserial (kprintf off the UART, which has nothing reading it)
         run: python3 ci/patch-kernel-noserial.py hakios/xnu-src/xnu-8796.121.2
 
