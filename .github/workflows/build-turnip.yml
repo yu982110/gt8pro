@@ -1,0 +1,129 @@
+name: build turnip (Turnip + UniXNU's Darwin backend, iOS 16 arm64)
+
+# The userland half of the GPU stack: Mesa's freedreno Vulkan driver (Turnip) built for iOS 16
+# arm64 with UniXNU's Darwin kernel backend, linked against the NativeAdreno ABI v1 that
+# bsd/dev/pandora_gpu.c and iokit/Kernel/arm/PandoraAdrenoGpu.cpp now serve.  Plus tools/vktest,
+# which is what actually talks to the GPU on the phone.
+#
+# Adapted from the reference port's own turnip.yml (refs/data-a-live/.github/workflows/):
+# same pinned commits and the same patch order, but built on ubuntu-22.04 with llvm-18 and the
+# theos iPhoneOS16.5 SDK (tools/turnip/build_ios_linux.sh) instead of macOS.
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/build-turnip.yml
+      - tools/turnip/**
+      - tools/vktest/**
+      - wsl/adreno/NativeAdrenoABI.h
+
+concurrency:
+  group: turnip-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  UNIXNU_SHA: 1a01c2afa197d975d04da892325c56b6b14aaecb
+  NATIVEADRENO_SHA: b686b9054f57d393c80195b82568a09f8ca106a2
+  MESA_SHA: 85fda3b36405bcaea8bffc64aa4f2651dc90770d
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: toolchain (llvm-18, meson, glslang, apple-codesign, ninja)
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ca-certificates wget gnupg lsb-release \
+              glslang-tools ninja-build bison flex python3-venv pkg-config
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key |
+            sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/apt.llvm.org.gpg
+          echo "deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy-18 main" |
+            sudo tee /etc/apt/sources.list.d/llvm18.list
+          sudo apt-get update
+          sudo apt-get install -y llvm-18 clang-18 lld-18
+          python3 -m venv venv
+          echo "$PWD/venv/bin" >> "$GITHUB_PATH"
+          venv/bin/pip install -q --upgrade pip
+          venv/bin/pip install -q meson ninja apple-codesign
+          /usr/lib/llvm-18/bin/clang --version | head -1
+          venv/bin/meson --version
+          venv/bin/rcodesign --version | head -1 || true
+          glslangValidator --version | head -2
+
+      - name: iPhoneOS16.5 SDK (headers and .tbd stubs only)
+        run: |
+          set -euo pipefail
+          git clone --depth 1 --filter=blob:none --sparse https://github.com/theos/sdks.git theos-sdks
+          git -C theos-sdks sparse-checkout set iPhoneOS16.5.sdk
+          mkdir -p sdks
+          ln -sfn "$PWD/theos-sdks/iPhoneOS16.5.sdk" sdks/iPhoneOS16.5.sdk
+          ls sdks/iPhoneOS16.5.sdk/usr/lib/libSystem.tbd >/dev/null
+          echo "SDK=$PWD/sdks/iPhoneOS16.5.sdk" >> "$GITHUB_ENV"
+
+      - name: sources (pinned Mesa, UniXNU, NativeAdreno) and patches
+        run: |
+          set -euo pipefail
+          exec > >(tee -a out-build.log) 2>&1
+          mkdir -p out
+          fetch() {  # DIR URL SHA
+            git init -q "$1"
+            git -C "$1" fetch -q --depth 1 "$2" "$3"
+            git -C "$1" checkout -q FETCH_HEAD
+          }
+          fetch unixnu https://github.com/UniXNU/UniXNU.git "$UNIXNU_SHA"
+          fetch nativeadreno https://github.com/UniXNU/NativeAdreno.git "$NATIVEADRENO_SHA"
+          fetch mesa https://chromium.googlesource.com/external/gitlab.freedesktop.org/mesa/mesa "$MESA_SHA" ||
+            fetch mesa https://gitlab.freedesktop.org/mesa/mesa.git "$MESA_SHA"
+          venv/bin/pip install -q -r unixnu/scripts/requirements-adreno-compiler.txt
+          for p in $(python3 -c 'import json; print(" ".join(json.load(open("unixnu/scripts/data/adreno-compiler-inputs.json"))["patches"]))'); do
+            echo "== $p"
+            git -C mesa apply --whitespace=nowarn "$PWD/unixnu/$p"
+          done
+          # the same follow-up patches the reference applies, in the same order
+          python3 tools/turnip/pandora_rpstats.py mesa
+          python3 tools/turnip/pandora_wait.py mesa
+          python3 tools/turnip/pandora_dsb.py mesa
+          python3 tools/turnip/pandora_bocheck.py mesa
+          python3 tools/turnip/pandora_bocheck_submit.py mesa
+          python3 tools/turnip/pandora_bocheck_finish.py mesa
+          python3 tools/turnip/pandora_bo_finish_order.py mesa
+          ls nativeadreno/NativeAdrenoABI.h
+          # 128 IBs per submission, as the kernel takes them (0194)
+          python3 tools/turnip/abi_128.py nativeadreno/NativeAdrenoABI.h
+          cmp nativeadreno/NativeAdrenoABI.h <(tr -d '\r' < wsl/adreno/NativeAdrenoABI.h)
+          echo "patches applied"
+
+      - name: build Turnip and vktest
+        timeout-minutes: 60
+        run: |
+          set -o pipefail
+          export PATH="/usr/lib/llvm-18/bin:$PWD/venv/bin:$PATH"
+          export SDK="$SDK" MESON="$PWD/venv/bin/meson" LLVM=/usr/lib/llvm-18/bin
+          bash tools/turnip/build_ios_linux.sh mesa nativeadreno out 2>&1 | tee -a out-build.log
+
+      - name: summary
+        if: always()
+        run: |
+          {
+            echo '### errors'; echo '```'
+            grep -E 'error:|FAILED:|fatal|ERROR:' out-build.log 2>/dev/null | head -60 || true
+            echo '```'; echo '### last lines'; echo '```'
+            tail -40 out-build.log 2>/dev/null || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: turnip-ios
+          path: |
+            out/libvulkan_freedreno.dylib
+            out/vktest
+            out-build.log
+            out/build/tu/meson-logs/meson-log.txt
+          if-no-files-found: warn
