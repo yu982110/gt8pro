@@ -18,6 +18,7 @@ it only PandoraAdrenoGpu exists, which is what Turnip takes
     python3 ci/patch-kernel-pandora-iokit.py <hakios tree>
 """
 import pathlib
+import re
 import sys
 
 MARK = "HAKIOS-PANDORA-IOKIT"
@@ -31,10 +32,12 @@ CONF_ANCHORS = [
     "iokit/Kernel/arm/FuxiAdrenoUserClient.cpp",
 ]
 CONF_TABLE = "iokit/KernelConfigTables.cpp"
-# gIOKernelConfigTables is one long concatenation of string literals, so a complete entry can go
-# anywhere between them; inserting right after the definition line needs no knowledge of how the
-# existing entries are spaced (the first attempt anchored on the IOWatchdog entry and missed).
-TABLE_DEF = "gIOKernelConfigTables"
+# The table is one concatenation of string literals that ends with a line ")";".  An entry has to
+# go between entries -- before that closing, the way patch-kernel-hid-config.py does it.  The
+# first attempt inserted right after the definition line, which is "= \"   {\"" on this tree:
+# that opened a second dictionary inside the first and IOCatalogue panicked at boot
+# ("IOCatalogue.cpp:121 ... handshake structure not initialized").
+TABLE_CLOSE = re.compile(r'^[ \t]*"\)";[ \t]*$', re.MULTILINE)
 TABLE_ADD = ("    \"   {\"\n"
              "    \"     'IOClass'         = PandoraAdrenoGpu;\"\n"
              "    \"     'IOProviderClass' = IOResources;\"\n"
@@ -89,17 +92,13 @@ def main(root):
     if "PandoraAdrenoGpu" in t:
         print("patch-pandora-iokit: KernelConfigTables.cpp already has the entry")
     else:
-        lines = t.splitlines(keepends=True)
-        done = False
-        for i, line in enumerate(lines):
-            if TABLE_DEF in line and "=" in line:
-                lines.insert(i + 1, TABLE_ADD)
-                done = True
-                break
-        if not done:
-            print("patch-pandora-iokit: MISS %s definition" % TABLE_DEF)
+        matches = list(TABLE_CLOSE.finditer(t))
+        if not matches:
+            print('patch-pandora-iokit: MISS the closing ")"; in KernelConfigTables.cpp')
             return 1
-        table.write_text("".join(lines), errors="surrogateescape")
+        at = matches[-1].start()
+        t = t[:at] + TABLE_ADD + t[at:]
+        table.write_text(t, errors="surrogateescape")
         print("patch-pandora-iokit: KernelConfigTables.cpp += PandoraAdrenoGpu on IOResources")
     return 0
 
