@@ -87,9 +87,14 @@ pandora_adreno_start(IOService *provider)
 """.replace("%MARK%", HELPER_MARK)
 
 PE_ANCHOR = "    sweet_hid_start(IOService::getResourceService());\n"
+# The declaration has to be at file scope (an `extern "C"` declaration inside a function body is
+# not valid C++: "expected unqualified-id").  patch-kernel-hid-start.py leaves its declaration
+# beside the display one, so this one sits beside the HID one.
+PE_DECL_ANCHOR = 'extern "C" void sweet_hid_start(IOService *provider);\n'
+PE_DECL = ("\n/* " + HELPER_MARK + " */\n"
+           "extern \"C\" void pandora_adreno_start(IOService *provider);\n")
 PE_ADD = ("    /* " + HELPER_MARK + ": the Adreno user client, which Turnip opens as\n"
           "     * TU_DARWIN_SERVICE=PandoraAdrenoGpu / TU_DARWIN_OPEN_TYPE=0x4147. */\n"
-          "    extern \"C\" void pandora_adreno_start(IOService *provider);\n"
           "    pandora_adreno_start(IOService::getResourceService());\n")
 
 
@@ -166,16 +171,22 @@ def main(root):
         print("patch-pandora-iokit: MISS iokit/Kernel/GenericARMPE.cpp")
         return 1
     p = pe.read_text(errors="surrogateescape")
-    if HELPER_MARK + " call" in p or "pandora_adreno_start(IOService::getResourceService())" in p:
+    if "pandora_adreno_start(IOService::getResourceService())" in p:
         print("patch-pandora-iokit: GenericARMPE.cpp already starts it")
-    elif PE_ANCHOR in p:
-        p = p.replace(PE_ANCHOR, PE_ANCHOR + PE_ADD, 1)
-        pe.write_text(p, errors="surrogateescape")
-        print("patch-pandora-iokit: GenericARMPE.cpp calls pandora_adreno_start()")
-    else:
+    elif PE_ANCHOR not in p:
         print("patch-pandora-iokit: MISS the HID start call in GenericARMPE.cpp "
               "(the hid-start step has to run first)")
         return 1
+    else:
+        if PE_DECL_ANCHOR in p:
+            p = p.replace(PE_DECL_ANCHOR, PE_DECL_ANCHOR + PE_DECL, 1)
+        elif PE_DECL.strip() not in p:
+            print("patch-pandora-iokit: MISS the HID declaration in GenericARMPE.cpp "
+                  "for the file-scope declaration")
+            return 1
+        p = p.replace(PE_ANCHOR, PE_ANCHOR + PE_ADD, 1)
+        pe.write_text(p, errors="surrogateescape")
+        print("patch-pandora-iokit: GenericARMPE.cpp calls pandora_adreno_start()")
     return 0
 
 
