@@ -145,7 +145,7 @@ MACH_NEW = (
     "\t\t\tstruct hakios_mockfs_probe *hmp = kmp ? (struct hakios_mockfs_probe *)kmp->mnt_data : NULL;\n"
     "\t\t\tvnode_t kvp = imgp->ip_vp;\n"
     "\t\t\tmshown++;\n"
-    "\t\t\tpanic(\"MACHHDR magic %x ftype %d cpu %x sub %x ncmds %u size %llu fs %s tag %u from %s mem %d base %llu msize %llu vdata %p vname %s\",\n"
+    "\t\t\tprintf(\"MACHHDR magic %x ftype %d cpu %x sub %x ncmds %u size %llu fs %s tag %u from %s mem %d base %llu msize %llu vdata %p vname %s\",\n"
     "\t\t\t    (unsigned)mach_header->magic, (int)mach_header->filetype,\n"
     "\t\t\t    (unsigned)mach_header->cputype, (unsigned)mach_header->cpusubtype,\n"
     "\t\t\t    (unsigned)mach_header->ncmds, (unsigned long long)imgp->ip_arch_size,\n"
@@ -165,7 +165,7 @@ MACH_NEW = (
     "\tif ((mach_header->magic == MH_MAGIC) || (mach_header->magic == MH_MAGIC_64)) {\n"
     "\t\tmount_t gmp = imgp->ip_vp ? vnode_mount(imgp->ip_vp) : NULL;\n"
     "\t\tvnode_t gvp = imgp->ip_vp;\n"
-    "\t\tpanic(\"GOODHDR magic %x ftype %d cpu %x sub %x ncmds %u size %llu fs %s from %s vname %s\",\n"
+    "\t\tprintf(\"GOODHDR magic %x ftype %d cpu %x sub %x ncmds %u size %llu fs %s from %s vname %s\",\n"
     "\t\t    (unsigned)mach_header->magic, (int)mach_header->filetype,\n"
     "\t\t    (unsigned)mach_header->cputype, (unsigned)mach_header->cpusubtype,\n"
     "\t\t    (unsigned)mach_header->ncmds, (unsigned long long)imgp->ip_arch_size,\n"
@@ -357,6 +357,22 @@ def patch_size2(root):
 
 
 def main(root):
+    # HAKIOS-PROBE-NOMACH: the kern_exec Mach-O panic is what stopped the boot, and the
+    # clean build without ANY probe then hung with not one byte of output -- so the rest of
+    # the probe set stays on (the APFS ones cannot fire on a RAM boot anyway) and only the
+    # known-good clean build keeps its address.  With hakios_panic_after=N the kernel hands
+    # its log over on purpose instead.
+    print("patch-apfs-size-probe: APFS probes on, kern_exec Mach-O panic off")
+    rc = 0
+    for fn in (patch_exec, patch_vnode, patch_inode, patch_rec, patch_read, patch_size2):
+        try:
+            rc |= fn(root)
+        except Exception as exc:  # a probe that cannot be placed must not stop the build
+            print("patch-apfs-size-probe: %s skipped: %s" % (fn.__name__, exc))
+    return rc
+
+
+def _probe_main(root):
     p = pathlib.Path(root) / "bsd/miscfs/apfs/apfs_vnops.c"
     if not p.exists():
         print(f"patch-apfs-size-probe: {p} not found")
