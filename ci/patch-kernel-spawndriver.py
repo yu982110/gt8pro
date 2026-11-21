@@ -32,8 +32,8 @@ import sys
 
 MARK = "/* HAKIOS-LAFA-SPAWNDRIVER */"
 FROM = "\t\t\tif (!IOCurrentTaskHasEntitlement(POSIX_SPAWN_ENTITLEMENT_DRIVER)) {\n"
-TO = ("\t\t\t" + MARK + " the caller's entitlement is not visible through miniamfi here; this"
-      " port runs without AMFI enforcement, so allow it\n"
+TO = ("\t\t\t" + MARK + ": the caller's entitlement is not visible through miniamfi here,\n"
+      "\t\t\t * and this port runs without AMFI enforcement, so allow it. */\n"
       "\t\t\tif (0 && !IOCurrentTaskHasEntitlement(POSIX_SPAWN_ENTITLEMENT_DRIVER)) {\n")
 
 
