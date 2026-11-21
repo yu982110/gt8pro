@@ -363,6 +363,9 @@ jobs:
       # the object tree is cached now: patched sources get fresh mtimes, so make
       # rebuilds exactly the files the patches touched
 
+      - name: patch kernel Adreno 840 level 1 probe (read only)
+        run: python3 ci/patch-kernel-pandora-gpu-probe.py hakios/xnu-src/xnu-8796.121.2
+
       - name: patch kernel APFS probes (inode / cursor / read path)
         run: python3 ci/patch-kernel-apfs-size-probe.py hakios/xnu-src/xnu-8796.121.2
 
