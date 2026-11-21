@@ -357,6 +357,15 @@ def patch_size2(root):
 
 
 def main(root):
+    # HAKIOS-PROBE-OFF: the probe printed a VALID Mach-O header
+    # (feedfacf / 2 / 100000c / 0 / ncmds 8 / size 49152 / fs mockfs): the exec path is
+    # sound and the probe only stopped the boot, so it stays out of the way.  The body is
+    # kept as _probe_main() for when a probe is wanted again.
+    print("patch-apfs-size-probe: disabled (the Mach-O header is correct)")
+    return 0
+
+
+def _probe_main(root):
     p = pathlib.Path(root) / "bsd/miscfs/apfs/apfs_vnops.c"
     if not p.exists():
         print(f"patch-apfs-size-probe: {p} not found")
