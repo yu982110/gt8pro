@@ -360,11 +360,11 @@ pandora_pas_load_auth(const char *file, unsigned pas, uint64_t mem_pa, uint64_t 
 
 /* ---- stubs for the levels this port has not taken on yet --------------------------------- */
 
-void
-pandora_gpu_release_ref(void *ref)
-{
-	(void)ref;
-}
+/*
+ * pandora_gpu_release_ref is NOT stubbed here: iokit/Kernel/arm/PandoraAdrenoGpu.cpp defines the
+ * real one (it completes and releases the imported buffer's IOMemoryDescriptor). Defining it in
+ * both places was a duplicate symbol at link time.
+ */
 
 void
 sweet_gic_counts(uint64_t *fired, uint64_t *unregistered, uint64_t *hard_disables)
