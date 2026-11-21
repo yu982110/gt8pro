@@ -103,11 +103,11 @@ def main(root):
             print("patch-stop-probe: WARN include anchor missing")
             rc = 1
     # the helper goes right before the function
-    anchor = "load_machfile(\n\tstruct image_params     *imgp,"
+    anchor = "load_return_t\nload_machfile(\n\tstruct image_params     *imgp,"
     if anchor not in t:
         print("patch-stop-probe: MISS load_machfile signature")
         return 1
-    t = t.replace(anchor, HELPER.strip("\n") + "\n\nstatic load_return_t\n" + anchor, 1)
+    t = t.replace(anchor, HELPER.strip("\n") + "\n\n" + anchor, 1)
     for old, new, name in ((ENTRY_OLD, ENTRY_NEW, "entry"),
                            (GRADE_OLD, GRADE_NEW, "after grade_binary"),
                            (END_OLD, END_NEW, "end")):
