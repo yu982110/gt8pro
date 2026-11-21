@@ -31,14 +31,15 @@ CONF_ANCHORS = [
     "iokit/Kernel/arm/FuxiAdrenoUserClient.cpp",
 ]
 CONF_TABLE = "iokit/KernelConfigTables.cpp"
-TABLE_ANCHOR = "    \"   {\"\n    \"     'IOClass'         = IOWatchdog;\"\n"
+# gIOKernelConfigTables is one long concatenation of string literals, so a complete entry can go
+# anywhere between them; inserting right after the definition line needs no knowledge of how the
+# existing entries are spaced (the first attempt anchored on the IOWatchdog entry and missed).
+TABLE_DEF = "gIOKernelConfigTables"
 TABLE_ADD = ("    \"   {\"\n"
              "    \"     'IOClass'         = PandoraAdrenoGpu;\"\n"
              "    \"     'IOProviderClass' = IOResources;\"\n"
              "    \"     'IOMatchCategory' = PandoraAdrenoGpu;\"\n"
-             "    \"   },\"\n"
-             "    \"   {\"\n"
-             "    \"     'IOClass'         = IOWatchdog;\"\n")
+             "    \"   },\"\n")
 
 
 def main(root):
@@ -87,13 +88,19 @@ def main(root):
     t = table.read_text(errors="surrogateescape")
     if "PandoraAdrenoGpu" in t:
         print("patch-pandora-iokit: KernelConfigTables.cpp already has the entry")
-    elif TABLE_ANCHOR in t:
-        t = t.replace(TABLE_ANCHOR, TABLE_ADD, 1)
-        table.write_text(t, errors="surrogateescape")
-        print("patch-pandora-iokit: KernelConfigTables.cpp += PandoraAdrenoGpu on IOResources")
     else:
-        print("patch-pandora-iokit: MISS KernelConfigTables anchor (IOWatchdog entry)")
-        return 1
+        lines = t.splitlines(keepends=True)
+        done = False
+        for i, line in enumerate(lines):
+            if TABLE_DEF in line and "=" in line:
+                lines.insert(i + 1, TABLE_ADD)
+                done = True
+                break
+        if not done:
+            print("patch-pandora-iokit: MISS %s definition" % TABLE_DEF)
+            return 1
+        table.write_text("".join(lines), errors="surrogateescape")
+        print("patch-pandora-iokit: KernelConfigTables.cpp += PandoraAdrenoGpu on IOResources")
     return 0
 
 
