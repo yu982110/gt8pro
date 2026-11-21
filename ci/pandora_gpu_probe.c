@@ -38,7 +38,6 @@ extern vm_offset_t ml_io_map_unmappable(vm_offset_t phys_addr, vm_size_t size, u
 /* HAKIOS-GPU-UNMAPPABLE */
 
 extern kern_return_t thread_terminate(thread_t);
-extern vm_offset_t gpu_map(vm_offset_t, vm_size_t);
 void pandora_gpu_init(void);
 
 #define GCC_PA            0x00100000u
