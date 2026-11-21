@@ -252,9 +252,15 @@ jobs:
         continue-on-error: true
         run: python3 ci/patch-kernel-procinfo-probe.py hakios/xnu-src/xnu-8796.121.2
 
-      - name: patch kernel nologd (refuse logd so its crash chain cannot freeze the boot)
-        continue-on-error: true
-        run: python3 ci/patch-kernel-nologd.py hakios/xnu-src/xnu-8796.121.2
+      # DISABLED 2026-11-22 03:40 -- this patch is why logd never starts: it returns ENOENT from
+      # __mac_execve()/posix_spawn() for logd, so the spawnattr EPERM question below could never
+      # be answered (the HAKIOS-EXEC "site1" line is printed unconditionally in front of the
+      # check, see the SPAWNDRIVER-DUMP step, and is not evidence of a denial). Boot without it
+      # and watch for the old freeze: if it returns, the trigger is the logd crash chain and the
+      # freeze point is the kernel's process-exit path, not posix_spawn.
+      # - name: patch kernel nologd (refuse logd so its crash chain cannot freeze the boot)
+      #   continue-on-error: true
+      #   run: python3 ci/patch-kernel-nologd.py hakios/xnu-src/xnu-8796.121.2
 
       - name: patch kernel workq probe (which workq_kernreturn operation the freeze is in)
         continue-on-error: true
@@ -290,6 +296,10 @@ jobs:
           grep -n 'POSIX_SPAWN_ENTITLEMENT_DRIVER' hakios/xnu-src/xnu-8796.121.2/bsd/kern/kern_exec.c || true
           echo '=== what the probe site looks like now ==='
           grep -n -A12 'HAKIOS-LAFA-SPAWNDRIVER' hakios/xnu-src/xnu-8796.121.2/bsd/kern/kern_exec.c || true
+          echo '=== nologd patch (expected ABSENT on this build) ==='
+          grep -n 'HAKIOS-LAFA-NOLOGD' hakios/xnu-src/xnu-8796.121.2/bsd/kern/kern_exec.c \
+            && echo 'NOLOGD: STILL PRESENT -- the logd test is invalid' \
+            || echo 'NOLOGD: absent (logd is allowed to spawn)'
       - name: patch kernel spawn driver check (the condition, not the return form)
         continue-on-error: true
         run: python3 ci/patch-kernel-spawndriver.py hakios/xnu-src/xnu-8796.121.2
