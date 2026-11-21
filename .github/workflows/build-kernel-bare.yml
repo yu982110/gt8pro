@@ -282,6 +282,9 @@ jobs:
         continue-on-error: true
         run: python3 ci/patch-kernel-execprobe.py hakios/xnu-src/xnu-8796.121.2
 
+      - name: patch kernel spawn driver check (the condition, not the return form)
+        continue-on-error: true
+        run: python3 ci/patch-kernel-spawndriver.py hakios/xnu-src/xnu-8796.121.2
       - name: patch kernel spawn policy (allow DRIVER spawn type)
         continue-on-error: true
         run: python3 ci/patch-kernel-spawnpolicy.py hakios/xnu-src/xnu-8796.121.2
