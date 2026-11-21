@@ -94,7 +94,7 @@ static void
 gpu_step(const char *what)
 {
 	printf("PANDORA GPU: next: %s\n", what);
-	gpu_sleep(3500);
+	gpu_sleep(800);
 }
 
 /* ---- cmd-db (same layout as pandora_adsp.c) ------------------------------------------- */
