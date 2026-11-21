@@ -33,20 +33,22 @@ K_STRUCT_NEW = """\tconst uint64_t *sound;          /* loader_sound: the same fo
 };
 """
 
-K_FUNC_OLD = "/*\n * A screen recording (the display driver makes one with boot-arg rec_secs)"
-K_FUNC_NEW = """/*
+K_FUNC_OLD = "\t.magic2 = 0x324556494c554e58ULL, .sound = loader_sound,\n};\n"
+K_FUNC_NEW = """\t.magic2 = 0x324556494c554e58ULL, .sound = loader_sound,
+};
+
+/*
  * HAKIOS-BOOT-STAGE: the boot stage the kernel last reached.  Written with a plain store and
- * read by the loader every second; kprintf cannot report progress because PE_kputc is 0
- * until PE_init_kprintf runs, which is exactly what this is here to find.
+ * read by the loader every second; kprintf cannot report progress because PE_kputc is 0 until
+ * PE_init_kprintf runs, which is exactly what this is here to find.  It has to be defined after
+ * loader_live itself, or the compiler reads `loader_live' as a type name.
  */
 void
 loader_stage(uint64_t n)
 {
 \tloader_live.stage = n;
 }
-
-/*
- * A screen recording (the display driver makes one with boot-arg rec_secs)"""
+"""
 
 # ---------------------------------------------------------------- loader: struct + diag
 L_STRUCT_OLD = "\tuint64_t sound;                 /* (a virtual address too) the same for a recording of the sound */\n"
@@ -121,10 +123,13 @@ def instrument(root):
         return 0
     n_before = len(re.findall(r"loader_checkpoint\((\d+)\);", t))
     if "extern void loader_stage" not in t:
-        m = re.search(r"^#include .*$", t, re.M)
-        if m:
-            t = t[:m.end()] + "\n/* HAKIOS-BOOT-STAGE: set by ci/patch-kernel-boot-stage.py */\nextern void loader_stage(uint64_t n);" + t[m.end():]
-            print("patch-boot-stage: loader_stage() declared at file scope")
+        # after the LAST #include: before them, uint64_t is not a known type yet
+        last = None
+        for m in re.finditer(r"^#include .*$", t, re.M):
+            last = m
+        if last:
+            t = t[:last.end()] + "\n/* HAKIOS-BOOT-STAGE: set by ci/patch-kernel-boot-stage.py */\nextern void loader_stage(uint64_t n);" + t[last.end():]
+            print("patch-boot-stage: loader_stage() declared after the last include")
     t = re.sub(r"loader_checkpoint\((\d+)\);", r"loader_checkpoint(\1); loader_stage(\1);", t)
     # and around the kprintf setup, which is what PE_kputc depends on
     t = re.sub(r"\n(\t*kernel_startup_initialize_upto\(STARTUP_SUB_KPRINTF\);)\n",
