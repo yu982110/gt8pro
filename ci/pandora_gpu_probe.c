@@ -357,12 +357,30 @@ pandora_gpu_init(void)
 {
 	thread_t thread;
 	int level = 0;
-	(void)PE_parse_boot_argn("pandora_gpu", &level, sizeof(level));
+	int parsed = PE_parse_boot_argn("pandora_gpu", &level, sizeof(level));
+	const char *args = PE_boot_args();
+
+	/*
+	 * HAKIOS-GPU-DIAG: this is reached from bsdinit_task right after bsd_do_post (verified in the
+	 * image: bl _bsd_do_post -> kprintf -> bl _pandora_gpu_init).  A probe that says nothing has
+	 * to say why, or a whole boot cycle is wasted: how the boot argument parsed, and what the
+	 * kernel's own copy of the string looks like from inside.
+	 */
+	printf("PANDORA GPU: init parsed %d level %d\n", parsed, level);
+	if (args != NULL) {
+		printf("PANDORA GPU: args <%s>\n", args);
+	} else {
+		printf("PANDORA GPU: args NULL\n");
+	}
 	if (level <= 0) {
+		printf("PANDORA GPU: boot-arg pandora_gpu missing or 0, probe idle\n");
 		return;
 	}
 	if (kernel_thread_start(gpu_thread, NULL, &thread) == KERN_SUCCESS) {
+		printf("PANDORA GPU: probe thread started\n");
 		thread_deallocate(thread);
+	} else {
+		printf("PANDORA GPU: kernel_thread_start FAILED\n");
 	}
 }
 #endif /* PANDORA */
