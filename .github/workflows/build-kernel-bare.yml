@@ -122,6 +122,9 @@ jobs:
       # (no-assert step removed: turning mach_assert off leaves our own 4K patch's
       #  _debug4k_proc_filter/_debug4k_proc_name undefined, and vm_footprint_suspend_allowed
       #  too -- those need guards on the patch side first)
+      - name: patch kernel to empty the lock assertions
+        run: python3 ci/patch-kernel-no-lock-assert.py hakios/xnu-src/xnu-8796.121.2
+
       - name: patch kernel to panic after N seconds (hakios_panic_after=N)
         run: python3 ci/patch-kernel-panic-after.py hakios/xnu-src/xnu-8796.121.2
 
