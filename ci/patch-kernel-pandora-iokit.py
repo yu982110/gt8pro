@@ -43,6 +43,55 @@ TABLE_ADD = ("    \"   ,{\"\n"
              "    \"     'IOMatchCategory' = PandoraAdrenoGpu;\"\n"
              "    \"   }\"\n")
 
+# This port does not probe the config table's personalities at all -- the display and HID
+# services are "started by hand" from GenericARMPE.cpp for the same reason -- so the user client
+# gets the same treatment: a helper that allocates, attaches and starts it, called from
+# GenericARMPE right after the HID services.
+HELPER_MARK = "HAKIOS-PANDORA-ADRENO-START"
+HELPER = """
+
+/* %MARK%: start the Adreno user client by hand.  Its personality in
+ * iokit/KernelConfigTables.cpp is never probed on this kernel (the display and HID services are
+ * started by hand for the same reason), so without this call the service that Turnip opens
+ * would simply not exist. */
+extern "C" void loader_log_line(const char *line);
+
+extern "C" void
+pandora_adreno_start(IOService *provider)
+{
+	PandoraAdrenoGpu *svc = OSTypeAlloc(PandoraAdrenoGpu);
+
+	if (svc == nullptr) {
+		loader_log_line("HAKIOS-GPU: PandoraAdrenoGpu out of memory\\n");
+	} else if (!svc->init() || !svc->attach(provider)) {
+		loader_log_line("HAKIOS-GPU: PandoraAdrenoGpu init/attach failed\\n");
+	} else if (!svc->start(provider)) {
+		loader_log_line("HAKIOS-GPU: PandoraAdrenoGpu start failed\\n");
+	} else {
+		loader_log_line("HAKIOS-GPU: PandoraAdrenoGpu started by hand\\n");
+	}
+
+	AGXAccelerator *acc = OSTypeAlloc(AGXAccelerator);
+
+	if (acc == nullptr) {
+		loader_log_line("HAKIOS-GPU: AGXAccelerator out of memory\\n");
+	} else if (!acc->init() || !acc->attach(provider)) {
+		loader_log_line("HAKIOS-GPU: AGXAccelerator init/attach failed\\n");
+	} else if (!acc->start(provider)) {
+		/* expected without pandora_gpu_metal=1: it publishes only for NativeMetal */
+		loader_log_line("HAKIOS-GPU: AGXAccelerator not started (pandora_gpu_metal=0)\\n");
+	} else {
+		loader_log_line("HAKIOS-GPU: AGXAccelerator started by hand\\n");
+	}
+}
+""".replace("%MARK%", HELPER_MARK)
+
+PE_ANCHOR = "    sweet_hid_start(IOService::getResourceService());\n"
+PE_ADD = ("    /* " + HELPER_MARK + ": the Adreno user client, which Turnip opens as\n"
+          "     * TU_DARWIN_SERVICE=PandoraAdrenoGpu / TU_DARWIN_OPEN_TYPE=0x4147. */\n"
+          "    extern \"C\" void pandora_adreno_start(IOService *provider);\n"
+          "    pandora_adreno_start(IOService::getResourceService());\n")
+
 
 def main(root):
     root = pathlib.Path(root)
@@ -99,6 +148,34 @@ def main(root):
         t = t[:at] + TABLE_ADD + t[at:]
         table.write_text(t, errors="surrogateescape")
         print("patch-pandora-iokit: KernelConfigTables.cpp += PandoraAdrenoGpu on IOResources")
+
+    # 4. and start it by hand, the way this port starts the display and HID services
+    g = dst.read_text(encoding="utf-8")
+    if HELPER_MARK in g:
+        print("patch-pandora-iokit: PandoraAdrenoGpu.cpp already has the start helper")
+    else:
+        at = g.rfind("#endif")
+        if at < 0:
+            print("patch-pandora-iokit: MISS the trailing #endif in PandoraAdrenoGpu.cpp")
+            return 1
+        g = g[:at] + HELPER + g[at:]
+        dst.write_text(g, encoding="utf-8")
+        print("patch-pandora-iokit: PandoraAdrenoGpu.cpp += pandora_adreno_start()")
+    pe = root / "iokit/Kernel/GenericARMPE.cpp"
+    if not pe.exists():
+        print("patch-pandora-iokit: MISS iokit/Kernel/GenericARMPE.cpp")
+        return 1
+    p = pe.read_text(errors="surrogateescape")
+    if HELPER_MARK + " call" in p or "pandora_adreno_start(IOService::getResourceService())" in p:
+        print("patch-pandora-iokit: GenericARMPE.cpp already starts it")
+    elif PE_ANCHOR in p:
+        p = p.replace(PE_ANCHOR, PE_ANCHOR + PE_ADD, 1)
+        pe.write_text(p, errors="surrogateescape")
+        print("patch-pandora-iokit: GenericARMPE.cpp calls pandora_adreno_start()")
+    else:
+        print("patch-pandora-iokit: MISS the HID start call in GenericARMPE.cpp "
+              "(the hid-start step has to run first)")
+        return 1
     return 0
 
 
