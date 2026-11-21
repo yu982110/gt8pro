@@ -21,10 +21,10 @@
 #include <sys/errno.h>
 #include <kern/kalloc.h>
 #include <kern/clock.h>
+#include <machine/machine_routines.h>
 #include <pexpert/pexpert.h>
 #include <vm/pmap.h>
 #include <vm/vm_kern.h>
-#include <vm/vm_page.h>
 #include <arm/caches_internal.h>
 
 #define FW_PACK_DEFAULT_MIB  409600u    /* 400 GiB into userdata */
