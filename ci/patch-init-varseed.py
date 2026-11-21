@@ -135,6 +135,10 @@ varseed(void)
 		  "/private/var/db/dslocal/nodes/Default/groups/staff.plist", 0600 },
 		{ "/varseed/db/dslocal/nodes/Default/groups/admin.plist",
 		  "/private/var/db/dslocal/nodes/Default/groups/admin.plist", 0600 },
+		/* the keybag the reference's mkiosroot.sh ships: keybagd reads a system bag, and
+		 * usermanagerd's user sessions need it (docs/REFS-GETPWNAM.md section 2) */
+		{ "/varseed/private/var/keybags/systembag.kb",
+		  "/private/var/keybags/systembag.kb", 0600 },
 	};
 	static char text[4096], head[8];
 	struct stat st;
@@ -165,6 +169,38 @@ varseed(void)
 		}
 	}
 	printf("  varseed: %d directories, %d records copied, %d already there\\n", made, put, there);
+	/*
+	 * libtrace's directories and their ".migrated" stamps, exactly as ios-sweet's mkiosroot.sh
+	 * makes them: _logd is 272, and libtrace aborts its migration when it cannot write its own
+	 * directory (which then cascades into the daemons that log before launchd is up).
+	 */
+	{
+		static const struct { const char *path; int mode; } logdirs[] = {
+			{ "/private/var/db/diagnostics", 0751 },
+			{ "/private/var/db/diagnostics/timesync", 0751 },
+			{ "/private/var/db/uuidtext", 0755 },
+		};
+		static const char *const stamps[] = {
+			"/private/var/db/diagnostics/.migrated",
+			"/private/var/db/diagnostics/timesync/.migrated",
+			"/private/var/db/uuidtext/.migrated",
+		};
+		int j;
+		for (j = 0; j < (int)(sizeof(logdirs) / sizeof(logdirs[0])); j++) {
+			mkdir(logdirs[j].path, logdirs[j].mode);
+			chmod(logdirs[j].path, logdirs[j].mode);
+			chown(logdirs[j].path, 272, 272);
+		}
+		for (j = 0; j < (int)(sizeof(stamps) / sizeof(stamps[0])); j++) {
+			int sfd = open(stamps[j], O_WRONLY | O_CREAT | O_TRUNC, 0644);
+			if (sfd >= 0) {
+				close(sfd);
+				chown(stamps[j], 272, 272);
+				chmod(stamps[j], 0644);
+			}
+		}
+		printf("  varseed: libtrace dirs and .migrated stamps (272:272)\\n");
+	}
 	/* the record itself, read back: a directory service record is a binary plist */
 	fd = open("/private/var/db/dslocal/nodes/Default/users/mobile.plist", O_RDONLY, 0);
 	got = -1;
