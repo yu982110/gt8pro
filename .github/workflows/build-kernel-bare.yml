@@ -363,6 +363,9 @@ jobs:
       # the object tree is cached now: patched sources get fresh mtimes, so make
       # rebuilds exactly the files the patches touched
 
+      - name: patch kernel print the Mach-O magic exec rejected
+        run: python3 ci/patch-kernel-execmagic-probe.py hakios/xnu-src/xnu-8796.121.2
+
       - name: patch kernel print which check rejects the Mach-O
         run: python3 ci/patch-kernel-badmacho-probe.py hakios/xnu-src/xnu-8796.121.2
 
