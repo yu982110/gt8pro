@@ -27,25 +27,19 @@ OLD = """\tif (++loader_live.heartbeat % MEMORY_REPORT_BEATS == 0) {
 
 NEW = """\t/*
 \t * HAKIOS-PANIC-AFTER: "hakios_panic_after=N" -- panic once N seconds have gone by.
-\t * The log of a run that never returns is otherwise unreachable, and a bring-up that
-\t * works is exactly a run that never returns.
+\t * The log of a run that never returns is otherwise unreachable, and a working
+\t * bring-up is exactly a run that never returns.  Counted in heartbeats: this timer
+\t * runs every HV_WDT_PET_SECONDS, so N seconds is N / HV_WDT_PET_SECONDS beats.
 \t */
 \t{
 \t\tstatic int32_t after = -1;
-\t\tstatic uint64_t started;
-\t\tuint64_t now;
 
 \t\tif (after < 0) {
 \t\t\tafter = 0;
 \t\t\tPE_parse_boot_argn("hakios_panic_after", &after, sizeof(after));
-\t\t\tclock_get_uptime(&started);
 \t\t}
-\t\tif (after > 0 && clock_get_uptime(&now) == 0) {
-\t\t\tuint64_t ns = now - started;
-
-\t\t\tif (ns >= (uint64_t)after * NSEC_PER_SEC) {
-\t\t\t\tpanic("HAKIOS-PANIC-AFTER %d s: the kernel's log is handed to the loader now", after);
-\t\t\t}
+\t\tif (after > 0 && loader_live.heartbeat >= (uint64_t)(after / HV_WDT_PET_SECONDS + 1)) {
+\t\t\tpanic("HAKIOS-PANIC-AFTER %d s: the kernel's log is handed to the loader now", after);
 \t\t}
 \t}
 \tif (++loader_live.heartbeat % MEMORY_REPORT_BEATS == 0) {
