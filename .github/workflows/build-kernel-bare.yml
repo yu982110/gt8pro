@@ -366,6 +366,9 @@ jobs:
       - name: patch kernel Adreno 840 level 1 probe (read only)
         run: python3 ci/patch-kernel-pandora-gpu-probe.py hakios/xnu-src/xnu-8796.121.2
 
+      - name: patch kernel Adreno 840 user client (NativeAdreno ABI v1, what Turnip opens)
+        run: python3 ci/patch-kernel-pandora-iokit.py hakios/xnu-src/xnu-8796.121.2
+
       - name: patch kernel print the Mach-O magic exec rejected
         run: python3 ci/patch-kernel-execmagic-probe.py hakios/xnu-src/xnu-8796.121.2
 
