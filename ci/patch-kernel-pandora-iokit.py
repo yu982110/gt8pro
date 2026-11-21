@@ -32,17 +32,16 @@ CONF_ANCHORS = [
     "iokit/Kernel/arm/FuxiAdrenoUserClient.cpp",
 ]
 CONF_TABLE = "iokit/KernelConfigTables.cpp"
-# The table is one concatenation of string literals that ends with a line ")";".  An entry has to
-# go between entries -- before that closing, the way patch-kernel-hid-config.py does it.  The
-# first attempt inserted right after the definition line, which is "= \"   {\"" on this tree:
-# that opened a second dictionary inside the first and IOCatalogue panicked at boot
-# ("IOCatalogue.cpp:121 ... handshake structure not initialized").
+# Appending after the LAST entry means the comma goes in front and the closing brace has none --
+# the same form patch-kernel-hid-config.py uses ("   ,{" ... "   }").  A leading "{" with no comma
+# makes the whole table invalid JSON, and IOCatalogue then panics at IOCatalogue.cpp:121
+# ("handshake structure not initialized"), which is exactly what happened twice.
 TABLE_CLOSE = re.compile(r'^[ \t]*"\)";[ \t]*$', re.MULTILINE)
-TABLE_ADD = ("    \"   {\"\n"
+TABLE_ADD = ("    \"   ,{\"\n"
              "    \"     'IOClass'         = PandoraAdrenoGpu;\"\n"
              "    \"     'IOProviderClass' = IOResources;\"\n"
              "    \"     'IOMatchCategory' = PandoraAdrenoGpu;\"\n"
-             "    \"   },\"\n")
+             "    \"   }\"\n")
 
 
 def main(root):
