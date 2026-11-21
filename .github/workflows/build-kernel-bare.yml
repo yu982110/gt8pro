@@ -72,7 +72,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.ccache
-          key: ccache-${{ hashFiles('ci/**', 'lafa/**', '.github/workflows/build-kernel-bare.yml') }}
+          key: ccache-${{ github.run_id }}
           restore-keys: |
             ccache-
       - name: point clang at ccache
@@ -114,14 +114,6 @@ jobs:
       - name: patch kernel 4K pages
         run: python3 ci/patch-kernel-4k-pages.py hakios/xnu-src/xnu-8796.121.2
 
-      # (probe patch removed: the header it printed is valid -- feedfacf/2/100000c/8 -- so it only
-      #  stopped the boot; keep it for debugging with PROBE=1 by re-adding from git history)
-      - name: patch kernel APFS size probe (why launchd looks zero bytes)
-        run: python3 ci/patch-kernel-apfs-size-probe.py hakios/xnu-src/xnu-8796.121.2
-
-      # (no-assert step removed: turning mach_assert off leaves our own 4K patch's
-      #  _debug4k_proc_filter/_debug4k_proc_name undefined, and vm_footprint_suspend_allowed
-      #  too -- those need guards on the patch side first)
       - name: patch kernel pthread layout (match libpthread-514, 56 bytes)
         continue-on-error: true
         run: python3 ci/patch-kernel-pthread-layout.py hakios/xnu-src/xnu-8796.121.2
@@ -264,22 +256,12 @@ jobs:
         continue-on-error: true
         run: python3 ci/patch-kernel-nologd.py hakios/xnu-src/xnu-8796.121.2
 
-      - name: patch kernel workq phases (which phase of workq_thread_return hangs)
-        continue-on-error: true
-        run: python3 ci/patch-kernel-workq-phases.py hakios/xnu-src/xnu-8796.121.2
-
       - name: patch kernel workq probe (which workq_kernreturn operation the freeze is in)
         continue-on-error: true
         run: python3 ci/patch-kernel-workq-probe.py hakios/xnu-src/xnu-8796.121.2
 
       - name: patch kernel ticker (a heartbeat that does not use the console)
         run: python3 ci/patch-kernel-ticker.py hakios/xnu-src/xnu-8796.121.2
-
-      - name: patch kernel serial_init returns at once (get past arm_init L529)
-        run: python3 ci/patch-kernel-noserial-init.py hakios/xnu-src/xnu-8796.121.2
-
-      - name: patch kernel boot-stage marks (one word the loader reads)
-        run: python3 ci/patch-kernel-boot-stage.py hakios/xnu-src/xnu-8796.121.2
 
       - name: patch kernel noserial (kprintf off the UART, which has nothing reading it)
         run: python3 ci/patch-kernel-noserial.py hakios/xnu-src/xnu-8796.121.2
@@ -380,28 +362,6 @@ jobs:
 
       # the object tree is cached now: patched sources get fresh mtimes, so make
       # rebuilds exactly the files the patches touched
-
-      # The object tree is restored only for the exact same patch set: every patch
-      # script, the lafa config and this workflow are part of the key, so a restored
-      # BUILD can never be stale (a prefix restore is deliberately not used).
-      - name: object tree cache (reuse the whole compile when the patch set is unchanged)
-        uses: actions/cache@v4
-        with:
-          path: hakios/xnu-src/xnu-8796.121.2/BUILD
-          key: xnuobj-${{ hashFiles('ci/**', 'lafa/**', '.github/workflows/build-kernel-bare.yml') }}
-
-      # A restored BUILD has the right content but old timestamps, so make would
-      # rebuild everything. Touch the objects so they look newer than the freshly
-      # checked out sources; a changed patch set never restores this cache at all.
-      - name: freshen restored object timestamps
-        run: |
-          B=hakios/xnu-src/xnu-8796.121.2/BUILD
-          if [ -d "$B" ]; then
-            find "$B" -type f -exec touch {} + 2>/dev/null || true
-            echo "touched $(find "$B" -type f | wc -l) object-tree files"
-          else
-            echo "no restored object tree; the build starts cold"
-          fi
 
       - name: build kernel
         run: |
