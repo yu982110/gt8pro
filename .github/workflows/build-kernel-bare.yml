@@ -125,6 +125,9 @@ jobs:
       - name: patch kernel to empty the lock assertions
         run: python3 ci/patch-kernel-no-lock-assert.py hakios/xnu-src/xnu-8796.121.2
 
+      - name: patch kernel to stop at a load_machfile point (hakios_stop_at=N)
+        run: python3 ci/patch-kernel-stop-probe.py hakios/xnu-src/xnu-8796.121.2
+
       - name: patch kernel to panic after N seconds (hakios_panic_after=N)
         run: python3 ci/patch-kernel-panic-after.py hakios/xnu-src/xnu-8796.121.2
 
