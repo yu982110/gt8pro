@@ -118,9 +118,14 @@ def instrument(root):
         print("patch-boot-stage: %s not found" % p)
         return 1
     t = p.read_text(errors="surrogateescape")
-    if MARK in t:
-        print("patch-boot-stage: arm_init.c already instrumented")
-        return 0
+    if "loader_stage(" in t:
+        # the CI caches xnu-src, so the checkpoint marks may already be here from an earlier
+        # run while the early/arm_vm_init marks are new: do not gate the whole step on MARK
+        print("patch-boot-stage: arm_init.c checkpoints already marked")
+        rc = 0
+        rc |= mark_arm_init_early(root)
+        rc |= mark_arm_vm_init(root)
+        return rc
     n_before = len(re.findall(r"loader_checkpoint\((\d+)\);", t))
     if "extern void loader_stage" not in t:
         # after the LAST #include: before them, uint64_t is not a known type yet
@@ -145,7 +150,92 @@ def instrument(root):
         t = t.replace('#include <pexpert/pexpert.h>', '#include <pexpert/pexpert.h>\n/* HAKIOS-BOOT-STAGE: see ci/patch-kernel-boot-stage.py */', 1)
     p.write_text(t, errors="surrogateescape")
     print("patch-boot-stage: %d checkpoints marked, kprintf marks around the setup" % n_before)
-    return 0
+    rc = 0
+    rc |= mark_arm_init_early(root)
+    rc |= mark_arm_vm_init(root)
+    return rc
+
+
+def _insert_before(t, anchor, mark):
+    if anchor not in t:
+        print("patch-boot-stage: MISS anchor %r" % anchor.strip()[:50])
+        return t, False
+    return t.replace(anchor, "\tloader_stage(%d); /* HAKIOS-BOOT-STAGE */\n" % mark + anchor, 1), True
+
+
+def _insert_after(t, anchor, mark):
+    if anchor not in t:
+        print("patch-boot-stage: MISS anchor %r" % anchor.strip()[:50])
+        return t, False
+    return t.replace(anchor, anchor + "\tloader_stage(%d); /* HAKIOS-BOOT-STAGE */\n" % mark, 1), True
+
+
+def mark_arm_init_early(root):
+    """arm_init: around the calls between its start and the kprintf setup (Apple L368-L531)."""
+    p = pathlib.Path(root) / "osfmk/arm/arm_init.c"
+    t = p.read_text(errors="surrogateescape")
+    if "loader_stage(100)" in t:
+        print("patch-boot-stage: arm_init early marks already there")
+        return 0
+    rc = 0
+    steps = [
+        ("\twfe_timeout_configure();\n", "before", 100),
+        ("\tarm_vm_init(xmaxmem, args);\n", "before", 101),
+        ("\tarm_vm_init(xmaxmem, args);\n", "after", 102),
+        ("\tPE_consistent_debug_inherit();\n", "before", 103),
+        ("\tPE_consistent_debug_inherit();\n", "after", 104),
+        ("\tconst unsigned int serial_exists = serial_init();\n", "before", 105),
+        ("\tconst unsigned int serial_exists = serial_init();\n", "after", 106),
+    ]
+    for anchor, where, mark in steps:
+        if where == "before":
+            t, ok = _insert_before(t, anchor, mark)
+        else:
+            t, ok = _insert_after(t, anchor, mark)
+        if not ok:
+            rc = 1
+    p.write_text(t, errors="surrogateescape")
+    print("patch-boot-stage: arm_init early marks 100-106")
+    return rc
+
+
+def mark_arm_vm_init(root):
+    """arm_vm_init: walk its page-table and physmap steps (Apple arm_vm_init.c L2141-L2247)."""
+    p = pathlib.Path(root) / "osfmk/arm64/arm_vm_init.c"
+    if not p.exists():
+        print("patch-boot-stage: %s not found" % p)
+        return 1
+    t = p.read_text(errors="surrogateescape")
+    if "loader_stage(110)" in t:
+        print("patch-boot-stage: arm_vm_init marks already there")
+        return 0
+    if "extern void loader_stage" not in t:
+        last = None
+        for m in re.finditer(r"^#include .*$", t, re.M):
+            last = m
+        if last:
+            t = t[:last.end()] + "\n/* HAKIOS-BOOT-STAGE */\nextern void loader_stage(uint64_t n);" + t[last.end():]
+            print("patch-boot-stage: loader_stage declared in arm_vm_init.c")
+    rc = 0
+    steps = [
+        ("\tarm_set_user_tbi();\n", "before", 110),
+        ("\tarm_vm_physmap_init(args);\n", "after", 111),
+        ("\tset_mmu_ttb_alternate(cpu_ttep & TTBR_BADDR_MASK);\n", "after", 112),
+        ("\tml_enable_monitor();\n", "after", 113),
+        ("\tset_mmu_ttb(invalid_ttep & TTBR_BADDR_MASK);\n", "after", 114),
+        ("\tflush_mmu_tlb();\n\tkva_active = TRUE;\n", "after", 116),
+        ("\tpmap_bootstrap(dynamic_memory_begin);\n", "after", 117),
+    ]
+    for anchor, where, mark in steps:
+        if where == "before":
+            t, ok = _insert_before(t, anchor, mark)
+        else:
+            t, ok = _insert_after(t, anchor, mark)
+        if not ok:
+            rc = 1
+    p.write_text(t, errors="surrogateescape")
+    print("patch-boot-stage: arm_vm_init marks 110-117")
+    return rc
 
 
 def main(root):
