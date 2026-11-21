@@ -122,9 +122,20 @@ main(void)
 	PFN_vkCreateInstance vkCreateInstance = (PFN_vkCreateInstance)gipa(NULL, "vkCreateInstance");
 	VkApplicationInfo app = { VK_STRUCTURE_TYPE_APPLICATION_INFO, NULL, "vktest", 1, "pandora", 1, VK_API_VERSION_1_1 };
 	VkInstanceCreateInfo ici = { VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO, NULL, 0, &app, 0, NULL, 0, NULL };
-	if (check("part 1: vkCreateInstance", vkCreateInstance(&ici, NULL, &inst))) {
+	/* 2026-11-22: started from a LaunchDaemon, this runs at ~44 s while the kernel's GPU thread is
+	 * still bringing the GPU up (level 15 ends around 45-50 s), so the first vkCreateInstance would
+	 * find no device.  Retry for up to a minute instead of failing the whole test. */
+	VkResult ir = vkCreateInstance(&ici, NULL, &inst);
+	for (int attempt = 0; ir != VK_SUCCESS && attempt < 20; attempt++) {
+		say("VKTEST: vkCreateInstance -> %d, retrying (attempt %d of 20)", (int)ir, attempt + 1);
+		sleep(3);
+		ir = vkCreateInstance(&ici, NULL, &inst);
+	}
+	if (ir != VK_SUCCESS) {
+		say("VKTEST: part 1: vkCreateInstance FAIL (%d)", (int)ir);
 		return 1;
 	}
+	say("VKTEST: part 1: vkCreateInstance ok");
 	IFN(vkEnumeratePhysicalDevices);
 	IFN(vkGetPhysicalDeviceProperties);
 	IFN(vkGetPhysicalDeviceQueueFamilyProperties);
