@@ -57,28 +57,50 @@ pandora_fw_read(uint64_t off, void *dst, uint64_t len)
 #define SCM_FN(svc, cmd)  ((1ULL << 30) | (2ULL << 24) | (((uint64_t)(svc) & 0xffu) << 8) | ((cmd) & 0xffu))
 #define SCM_ARGS(n)       ((uint64_t)(n) & 0xfu)
 
+/*
+ * SMCCC yielding call: x0 == 1 does NOT mean failure, it means "the call was interrupted, call
+ * again with x0 = 1 and the x6 this call returned" (Linux qcom_scm-smc.c does the same loop).
+ * PAS init_image is long enough to be interrupted, which is exactly what happened the first time
+ * this ran: a0 = 1 read as an error and level 11 stopped.
+ */
 static uint64_t
 pandora_scm6(uint64_t fn, uint64_t arginfo, uint64_t x2, uint64_t x3, uint64_t x4, uint64_t x5,
     uint64_t *a0, uint64_t *a1)
 {
-	register uint64_t r0 __asm__("x0") = fn;
-	register uint64_t r1 __asm__("x1") = arginfo;
-	register uint64_t r2 __asm__("x2") = x2;
-	register uint64_t r3 __asm__("x3") = x3;
-	register uint64_t r4 __asm__("x4") = x4;
-	register uint64_t r5 __asm__("x5") = x5;
+	uint64_t x0 = fn, x6 = 0;
 
-	__asm__ volatile ("smc #0"
-	    : "+r" (r0), "+r" (r1), "+r" (r2), "+r" (r3), "+r" (r4), "+r" (r5)
-	    : : "x6", "x7", "x8", "x9", "x10", "x11", "x12", "x13", "x14", "x15", "x16", "x17",
-	        "memory");
+	for (int tries = 0; tries < 1000; tries++) {
+		register uint64_t r0 __asm__("x0") = x0;
+		register uint64_t r1 __asm__("x1") = arginfo;
+		register uint64_t r2 __asm__("x2") = x2;
+		register uint64_t r3 __asm__("x3") = x3;
+		register uint64_t r4 __asm__("x4") = x4;
+		register uint64_t r5 __asm__("x5") = x5;
+		register uint64_t r6 __asm__("x6") = x6;
+
+		__asm__ volatile ("smc #0"
+		    : "+r" (r0), "+r" (r1), "+r" (r2), "+r" (r3), "+r" (r4), "+r" (r5), "+r" (r6)
+		    : : "x7", "x8", "x9", "x10", "x11", "x12", "x13", "x14", "x15", "x16", "x17",
+		        "memory");
+		x6 = r6;
+		if (r0 != 1) {
+			if (a0 != NULL) {
+				*a0 = r0;
+			}
+			if (a1 != NULL) {
+				*a1 = r1;
+			}
+			return r0;
+		}
+		x0 = 1;
+	}
 	if (a0 != NULL) {
-		*a0 = r0;
+		*a0 = 1;
 	}
 	if (a1 != NULL) {
-		*a1 = r1;
+		*a1 = 0;
 	}
-	return r0;
+	return 1;
 }
 
 void
