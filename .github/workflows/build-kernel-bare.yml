@@ -1,4 +1,4 @@
-﻿name: build lafa kernel BARE (framebuffer patch only)
+name: build lafa kernel BARE (framebuffer patch only)
 
 "on":
   workflow_dispatch:
