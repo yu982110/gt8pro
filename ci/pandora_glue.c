@@ -379,3 +379,15 @@ sweet_gic_counts(uint64_t *fired, uint64_t *unregistered, uint64_t *hard_disable
 		*hard_disables = 0;
 	}
 }
+
+/*
+ * The reference's user client asks its SweetGIC this before wiring a filter interrupt source; this
+ * port has no SweetGIC (no such symbol in the kernel), so the answer is no and the client falls
+ * back to polling the fence, which is exactly the path it takes when the interrupt is missing
+ * ("PANDORA GPU UC: no interrupt ... fence waits poll"). Interrupts can be wired later.
+ */
+int
+sweet_gic_ready(void)
+{
+	return 0;
+}
