@@ -379,12 +379,13 @@ jobs:
         continue-on-error: true
         run: python3 ci/patch-kernel-display-start.py hakios/xnu-src/xnu-8796.121.2 2>&1 | tail -10
 
-      # 2026-11-22 10:4x: the runs die at the second backboardd first presents (AppleCLCD::swap).
-      # This takes the whole present path out; if the machine then lives past 120 s, the display
-      # present is the trigger.  Set NOSWAP: 1 below to turn it back into a normal present.
-      - name: patch kernel display no-swap (isolate the first-present path)
-        continue-on-error: true
-        run: python3 ci/patch-kernel-display-noswap.py hakios/xnu-src/xnu-8796.121.2 2>&1 | tail -5
+      # 2026-11-22 10:52: DISABLED after one bad boot.  Taking AppleCLCD::swap() out also took the
+      # console pause inside it out, and that pause is protective (this port's kernel console would
+      # draw through the physical address 0xFC800000 -- the comment in swap() says so).  The kernel
+      # then crashed within seconds of the hand-off, so nothing was measured.
+      # - name: patch kernel display no-swap (isolate the first-present path)
+      #   continue-on-error: true
+      #   run: python3 ci/patch-kernel-display-noswap.py hakios/xnu-src/xnu-8796.121.2 2>&1 | tail -5
       - name: patch kernel HID start (IOResources provider, not the PE)
         continue-on-error: true
         run: python3 ci/patch-kernel-hid-start.py hakios/xnu-src/xnu-8796.121.2
