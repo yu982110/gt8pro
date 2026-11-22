@@ -1,4 +1,4 @@
-name: build lafa kernel BARE (framebuffer patch only)
+﻿name: build lafa kernel BARE (framebuffer patch only)
 
 "on":
   workflow_dispatch:
@@ -277,7 +277,7 @@ jobs:
 
       # 2026-11-22 15:0x: with logd blocked the system reaches idle and then hard-resets.
       # Make machine_idle() a plain WFI so one boot says whether the deep-idle path is it.
-      - name: patch kernel idle (machine_idle -> plain wfi)
+      # 2026-11-22 16:2x: the loader alone lives 663 s, so the ~58 s reset is guest-side.\n      # Log every reboot(2) caller and make it a no-op: the log names the killer if it is one.\n      - name: patch kernel reboot trace (name the reboot(2) caller, do not reset)\n        continue-on-error: true\n        run: python3 ci/patch-kernel-reboot-trace.py hakios/xnu-src/xnu-8796.121.2\n\n      - name: patch kernel idle (machine_idle -> plain wfi)
         continue-on-error: true
         run: python3 ci/patch-kernel-idle-wfi.py hakios/xnu-src/xnu-8796.121.2
 
