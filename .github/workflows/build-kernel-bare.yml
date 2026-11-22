@@ -41,7 +41,10 @@ jobs:
           git clone --depth 1 https://github.com/oosexgang/hakios-xnu-kernel.git hakios
           cp -r lafa hakios/devices/lafa
           grep -q '^device lafa' hakios/devices/manifest.conf || \
-            printf '\ndevice lafa\n\tpath        devices/lafa\n' >> hakios/devices/manifest.conf
+            printf '
+device lafa
+\tpath        devices/lafa
+' >> hakios/devices/manifest.conf
           cd hakios
           python3 tools/hakios-device.py check lafa
 
@@ -81,7 +84,9 @@ jobs:
           sudo mkdir -p /usr/local/bin
           for c in clang clang++; do
             real=$(command -v $c)
-            printf '#!/bin/sh\nexec ccache %s "$@"\n' "$real" | sudo tee /usr/local/bin/$c >/dev/null
+            printf '#!/bin/sh
+exec ccache %s "$@"
+' "$real" | sudo tee /usr/local/bin/$c >/dev/null
             sudo chmod 755 /usr/local/bin/$c
             echo "$c -> ccache $real"
           done
@@ -277,7 +282,13 @@ jobs:
 
       # 2026-11-22 15:0x: with logd blocked the system reaches idle and then hard-resets.
       # Make machine_idle() a plain WFI so one boot says whether the deep-idle path is it.
-      # 2026-11-22 16:2x: the loader alone lives 663 s, so the ~58 s reset is guest-side.\n      # Log every reboot(2) caller and make it a no-op: the log names the killer if it is one.\n      - name: patch kernel reboot trace (name the reboot(2) caller, do not reset)\n        continue-on-error: true\n        run: python3 ci/patch-kernel-reboot-trace.py hakios/xnu-src/xnu-8796.121.2\n\n      - name: patch kernel idle (machine_idle -> plain wfi)
+      # 2026-11-22 16:2x: the loader alone lives 663 s, so the ~58 s reset is guest-side.
+      # Log every reboot(2) caller and make it a no-op: the log names the killer if it is one.
+      - name: patch kernel reboot trace (name the reboot(2) caller, do not reset)
+        continue-on-error: true
+        run: python3 ci/patch-kernel-reboot-trace.py hakios/xnu-src/xnu-8796.121.2
+
+      - name: patch kernel idle (machine_idle -> plain wfi)
         continue-on-error: true
         run: python3 ci/patch-kernel-idle-wfi.py hakios/xnu-src/xnu-8796.121.2
 
