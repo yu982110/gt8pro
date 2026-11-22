@@ -261,15 +261,15 @@ jobs:
         continue-on-error: true
         run: python3 ci/patch-kernel-procinfo-guard.py hakios/xnu-src/xnu-8796.121.2
 
-      # DISABLED 2026-11-22 03:40 -- this patch is why logd never starts: it returns ENOENT from
-      # __mac_execve()/posix_spawn() for logd, so the spawnattr EPERM question below could never
-      # be answered (the HAKIOS-EXEC "site1" line is printed unconditionally in front of the
-      # check, see the SPAWNDRIVER-DUMP step, and is not evidence of a denial). Boot without it
-      # and watch for the old freeze: if it returns, the trigger is the logd crash chain and the
-      # freeze point is the kernel's process-exit path, not posix_spawn.
-      # - name: patch kernel nologd (refuse logd so its crash chain cannot freeze the boot)
-      #   continue-on-error: true
-      #   run: python3 ci/patch-kernel-nologd.py hakios/xnu-src/xnu-8796.121.2
+      # RE-ENABLED 2026-11-22 14:30.  The loader's flight recorder (gpu84) captured the
+      # kernel's last megabyte: logd is exec'd and exits by SIGTRAP within ~2 ms, 41 times in
+      # a row, and the kernel's log stops right there (~80 s of kernel time) before the
+      # platform hard-resets.  The 03:40 experiment removed this guard to see whether the old
+      # freeze came back without it -- it did.  Put the guard back while the userspace crash
+      # itself is investigated; take it out when logd's SIGTRAP is fixed.
+      - name: patch kernel nologd (refuse logd so its crash chain cannot freeze the boot)
+        continue-on-error: true
+        run: python3 ci/patch-kernel-nologd.py hakios/xnu-src/xnu-8796.121.2
 
       - name: patch kernel workq probe (which workq_kernreturn operation the freeze is in)
         continue-on-error: true
