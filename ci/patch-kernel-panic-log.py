@@ -39,7 +39,7 @@ BLOCK = (
 
 DECL = "extern void loader_log_line(const char *line);   /* " + MARK + " */\n"
 
-ANCHOR_RE = re.compile(r"panic\(const char \*fmt, \.\.\.\)")
+ANCHOR_RE = re.compile(r"(?m)^panic\(")
 
 
 def main() -> int:
@@ -54,7 +54,7 @@ def main() -> int:
         return 0
     m = ANCHOR_RE.search(text)
     if m is None:
-        print("patch-panic-log: MISS panic() signature")
+        print("patch-panic-log: MISS panic() signature"); i = text.find("panic("); print("SNIPPET:", repr(text[max(0,i-80):i+160]) if i >= 0 else "no panic( at all")
         return 1
     brace = text.find("{", m.end())
     if brace < 0 or brace > m.end() + 400:
