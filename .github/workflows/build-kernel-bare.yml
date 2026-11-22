@@ -1,4 +1,4 @@
-name: build lafa kernel BARE (framebuffer patch only)
+﻿name: build lafa kernel BARE (framebuffer patch only)
 
 "on":
   workflow_dispatch:
@@ -279,6 +279,12 @@ jobs:
       # Make machine_idle() a plain WFI so one boot says whether the deep-idle path is it.
       # 2026-11-22 16:2x: the loader alone lives 663 s, so the ~58 s reset is guest-side.
       # Log every reboot(2) caller and make it a no-op: the log names the killer if it is one.
+      # 2026-11-22 17:3x: the ~57 s reset comes in the same second the machine stops, so log
+      # the panic message into the loader log at the top of panic() itself.
+      - name: patch kernel panic log (panic message into the loader log)
+        continue-on-error: true
+        run: python3 ci/patch-kernel-panic-log.py hakios/xnu-src/xnu-8796.121.2
+
       - name: patch kernel reboot trace (name the reboot(2) caller, do not reset)
         continue-on-error: true
         run: python3 ci/patch-kernel-reboot-trace.py hakios/xnu-src/xnu-8796.121.2
