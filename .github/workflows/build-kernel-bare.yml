@@ -275,6 +275,12 @@ jobs:
         continue-on-error: true
         run: python3 ci/patch-kernel-workq-probe.py hakios/xnu-src/xnu-8796.121.2
 
+      # 2026-11-22 15:0x: with logd blocked the system reaches idle and then hard-resets.
+      # Make machine_idle() a plain WFI so one boot says whether the deep-idle path is it.
+      - name: patch kernel idle (machine_idle -> plain wfi)
+        continue-on-error: true
+        run: python3 ci/patch-kernel-idle-wfi.py hakios/xnu-src/xnu-8796.121.2
+
       - name: patch kernel ticker (a heartbeat that does not use the console)
         run: python3 ci/patch-kernel-ticker.py hakios/xnu-src/xnu-8796.121.2
 
