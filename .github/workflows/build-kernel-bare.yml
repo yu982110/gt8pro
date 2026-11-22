@@ -1,4 +1,4 @@
-﻿name: build lafa kernel BARE (framebuffer patch only)
+name: build lafa kernel BARE (framebuffer patch only)
 
 "on":
   workflow_dispatch:
@@ -41,10 +41,7 @@ jobs:
           git clone --depth 1 https://github.com/oosexgang/hakios-xnu-kernel.git hakios
           cp -r lafa hakios/devices/lafa
           grep -q '^device lafa' hakios/devices/manifest.conf || \
-            printf '
-device lafa
-\tpath        devices/lafa
-' >> hakios/devices/manifest.conf
+            printf '\ndevice lafa\n\tpath        devices/lafa\n' >> hakios/devices/manifest.conf
           cd hakios
           python3 tools/hakios-device.py check lafa
 
@@ -84,9 +81,7 @@ device lafa
           sudo mkdir -p /usr/local/bin
           for c in clang clang++; do
             real=$(command -v $c)
-            printf '#!/bin/sh
-exec ccache %s "$@"
-' "$real" | sudo tee /usr/local/bin/$c >/dev/null
+            printf '#!/bin/sh\nexec ccache %s "$@"\n' "$real" | sudo tee /usr/local/bin/$c >/dev/null
             sudo chmod 755 /usr/local/bin/$c
             echo "$c -> ccache $real"
           done
