@@ -278,11 +278,12 @@ jobs:
       - name: patch kernel ticker (a heartbeat that does not use the console)
         run: python3 ci/patch-kernel-ticker.py hakios/xnu-src/xnu-8796.121.2
 
-      # 2026-11-22: the tick also goes into IMEM (0x14680FF0), which survives the reset, so the
-      # next boot's loader can say whether the kernel outlived the loader when the machine went.
-      - name: patch kernel IMEM heartbeat (a tick mark the next boot can read)
-        continue-on-error: true
-        run: python3 ci/patch-kernel-imem-mark.py hakios/xnu-src/xnu-8796.121.2
+      # 2026-11-22 10:42: DISABLED.  The IMEM heartbeat idea is dead: the loader's own probe that
+      # wrote 8 IMEM offsets killed the VM before it came up (loader boot log 0 bytes), so IMEM is
+      # not guest scratch on this phone.  Kept for the record, not run.
+      # - name: patch kernel IMEM heartbeat (a tick mark the next boot can read)
+      #   continue-on-error: true
+      #   run: python3 ci/patch-kernel-imem-mark.py hakios/xnu-src/xnu-8796.121.2
 
       - name: patch kernel noserial (kprintf off the UART, which has nothing reading it)
         run: python3 ci/patch-kernel-noserial.py hakios/xnu-src/xnu-8796.121.2
@@ -377,6 +378,13 @@ jobs:
       - name: patch kernel display start (the config table is not probed here, so start the services by hand)
         continue-on-error: true
         run: python3 ci/patch-kernel-display-start.py hakios/xnu-src/xnu-8796.121.2 2>&1 | tail -10
+
+      # 2026-11-22 10:4x: the runs die at the second backboardd first presents (AppleCLCD::swap).
+      # This takes the whole present path out; if the machine then lives past 120 s, the display
+      # present is the trigger.  Set NOSWAP: 1 below to turn it back into a normal present.
+      - name: patch kernel display no-swap (isolate the first-present path)
+        continue-on-error: true
+        run: python3 ci/patch-kernel-display-noswap.py hakios/xnu-src/xnu-8796.121.2 2>&1 | tail -5
       - name: patch kernel HID start (IOResources provider, not the PE)
         continue-on-error: true
         run: python3 ci/patch-kernel-hid-start.py hakios/xnu-src/xnu-8796.121.2
