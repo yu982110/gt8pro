@@ -252,6 +252,15 @@ jobs:
         continue-on-error: true
         run: python3 ci/patch-kernel-procinfo-probe.py hakios/xnu-src/xnu-8796.121.2
 
+      # 2026-11-22 10:09 (gpu60): the last screen line before the reset was
+      #   HAKIOS-PROCI entry pid 53 call 2 flavor 13     (and no "done" line)
+      # right after pid 53's proc_exit / task_terminate_internal, while flavor 15/8/18 on the
+      # same pid had just returned 0.  Refuse PIDINFO for a zombie so the flavour handler never
+      # dereferences the dead process; launchd gets ESRCH, which is what a reaped child is.
+      - name: patch kernel proc_info zombie guard (PIDINFO about a dead child stops the machine)
+        continue-on-error: true
+        run: python3 ci/patch-kernel-procinfo-guard.py hakios/xnu-src/xnu-8796.121.2
+
       # DISABLED 2026-11-22 03:40 -- this patch is why logd never starts: it returns ENOENT from
       # __mac_execve()/posix_spawn() for logd, so the spawnattr EPERM question below could never
       # be answered (the HAKIOS-EXEC "site1" line is printed unconditionally in front of the
