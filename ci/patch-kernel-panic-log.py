@@ -39,9 +39,7 @@ BLOCK = (
 
 DECL = "extern void loader_log_line(const char *line);   /* " + MARK + " */\n"
 
-ANCHOR_RE = re.compile(
-    r"(?m)^(?:void|__attribute__\(\(noreturn\)\)\s+void)\s*\npanic\(const char \*fmt, \.\.\.\)\s*\n\{\s*\n"
-)
+ANCHOR_RE = re.compile(r"panic\(const char \*fmt, \.\.\.\)")
 
 
 def main() -> int:
@@ -56,9 +54,13 @@ def main() -> int:
         return 0
     m = ANCHOR_RE.search(text)
     if m is None:
-        print("patch-panic-log: MISS panic() definition")
+        print("patch-panic-log: MISS panic() signature")
         return 1
-    text = text[:m.end()] + BLOCK + text[m.end():]
+    brace = text.find("{", m.end())
+    if brace < 0 or brace > m.end() + 400:
+        print("patch-panic-log: MISS panic() body brace")
+        return 1
+    text = text[:brace + 1] + "\n" + BLOCK + text[brace + 1:]
     if DECL not in text:
         text = DECL + text
     f.write_text(text, encoding="utf-8")
