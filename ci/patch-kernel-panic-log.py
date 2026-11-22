@@ -8,8 +8,8 @@ late.  The one channel that survives is the loader's own log buffer, which persi
 writes to the partition every second.
 
 So: format the panic message at the very top of panic() and hand it to loader_log_line(), the
-same hook the other port patches use.  If the 57 s death is a panic, its exact reason will be on
-the partition even when the machine resets in the same second.
+same hook the other port patches use.  The first parameter's name is taken from the signature
+the patch matched, so it works whether it is called fmt, format or string.
 
 Idempotent; exits 0 when already applied, 1 when no anchor is found.
 
@@ -21,25 +21,25 @@ import sys
 
 MARK = "HAKIOS-PANIC-LOG"
 
-BLOCK = (
-    "\t/* " + MARK + ": the panic text goes into the loader's log buffer, which is on the\n"
-    "\t * partition a second later even if this boot never returns. */\n"
-    "\t{\n"
-    "\t\tchar lafa_pl[256];\n"
-    "\t\tva_list lafa_plap;\n"
-    "\n"
-    "\t\tva_start(lafa_plap, fmt);\n"
-    "\t\tvsnprintf(lafa_pl, sizeof(lafa_pl), fmt, lafa_plap);\n"
-    "\t\tva_end(lafa_plap);\n"
-    "\t\tloader_log_line(\"[PANIC] \");\n"
-    "\t\tloader_log_line(lafa_pl);\n"
-    "\t\tloader_log_line(\"\\n\");\n"
-    "\t}\n"
-)
-
 DECL = "extern void loader_log_line(const char *line);   /* " + MARK + " */\n"
 
-ANCHOR_RE = re.compile(r"(?m)^panic\(")
+
+def block(name: str) -> str:
+    return (
+        "\t/* " + MARK + ": the panic text goes into the loader's log buffer, which is on the\n"
+        "\t * partition a second later even if this boot never returns. */\n"
+        "\t{\n"
+        "\t\tchar lafa_pl[256];\n"
+        "\t\tva_list lafa_plap;\n"
+        "\n"
+        "\t\tva_start(lafa_plap, " + name + ");\n"
+        "\t\tvsnprintf(lafa_pl, sizeof(lafa_pl), " + name + ", lafa_plap);\n"
+        "\t\tva_end(lafa_plap);\n"
+        "\t\tloader_log_line(\"[PANIC] \");\n"
+        "\t\tloader_log_line(lafa_pl);\n"
+        "\t\tloader_log_line(\"\\n\");\n"
+        "\t}\n"
+    )
 
 
 def main() -> int:
@@ -52,15 +52,20 @@ def main() -> int:
     if MARK in text:
         print("patch-panic-log: already applied")
         return 0
-    m = ANCHOR_RE.search(text)
+    # the definition: a signature line at column 0 followed by the opening brace
+    m = re.search(r"(?m)^(panic\(([^)\n]*)\)\s*)\n\{\n", text)
     if m is None:
-        print("patch-panic-log: MISS panic() signature"); i = text.find("panic("); print("SNIPPET:", repr(text[max(0,i-80):i+160]) if i >= 0 else "no panic( at all")
+        print("patch-panic-log: MISS panic() definition")
         return 1
-    brace = text.find("{", m.end())
-    if brace < 0 or brace > m.end() + 400:
-        print("patch-panic-log: MISS panic() body brace")
+    params = m.group(2)
+    first = params.split(",")[0].strip()
+    nm = re.search(r"(\w+)\s*$", first)
+    if nm is None:
+        print("patch-panic-log: MISS first parameter name in", repr(params))
         return 1
-    text = text[:brace + 1] + "\n" + BLOCK + text[brace + 1:]
+    name = nm.group(1)
+    print("patch-panic-log: signature", repr(m.group(1)), "-> parameter", name)
+    text = text[:m.end()] + block(name) + text[m.end():]
     if DECL not in text:
         text = DECL + text
     f.write_text(text, encoding="utf-8")
