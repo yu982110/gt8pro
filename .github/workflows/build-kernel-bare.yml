@@ -278,6 +278,12 @@ jobs:
       - name: patch kernel ticker (a heartbeat that does not use the console)
         run: python3 ci/patch-kernel-ticker.py hakios/xnu-src/xnu-8796.121.2
 
+      # 2026-11-22: the tick also goes into IMEM (0x14680FF0), which survives the reset, so the
+      # next boot's loader can say whether the kernel outlived the loader when the machine went.
+      - name: patch kernel IMEM heartbeat (a tick mark the next boot can read)
+        continue-on-error: true
+        run: python3 ci/patch-kernel-imem-mark.py hakios/xnu-src/xnu-8796.121.2
+
       - name: patch kernel noserial (kprintf off the UART, which has nothing reading it)
         run: python3 ci/patch-kernel-noserial.py hakios/xnu-src/xnu-8796.121.2
 
