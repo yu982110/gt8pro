@@ -343,13 +343,13 @@ jobs:
         continue-on-error: true
         run: python3 ci/patch-kernel-spawndriver.py hakios/xnu-src/xnu-8796.121.2
       - name: patch kernel spawn policy (allow DRIVER spawn type)
+        continue-on-error: true
+        run: python3 ci/patch-kernel-spawnpolicy.py hakios/xnu-src/xnu-8796.121.2
 
       # 2026-11-25 21:0x: name the branch that still refuses launchd's spawns.
       - name: patch kernel spawn return sites (number the EPERM branches)
         continue-on-error: true
         run: python3 ci/patch-kernel-spawn-ret.py hakios/xnu-src/xnu-8796.121.2
-        continue-on-error: true
-        run: python3 ci/patch-kernel-spawnpolicy.py hakios/xnu-src/xnu-8796.121.2
 
       - name: patch kernel ret probe (errno of xpcproxy's failed syscalls)
         continue-on-error: true
