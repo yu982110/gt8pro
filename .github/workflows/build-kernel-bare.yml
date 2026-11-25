@@ -411,7 +411,7 @@ jobs:
       # from its own display service (SweetFramebuffer/AppleCLCD).
       - name: patch kernel framebuffer fill (the kernel paints the panel)
         continue-on-error: true
-        run: python3 ci/patch-kernel-fb-fill-kernel.py hakios/xnu-src/xnu-8796.121.2
+        run: echo SKIP-fbfill-kernel
 
       # 2026-11-22 10:52: DISABLED after one bad boot.  Taking AppleCLCD::swap() out also took the
       # console pause inside it out, and that pause is protective (this port's kernel console would
