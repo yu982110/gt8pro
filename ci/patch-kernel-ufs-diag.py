@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """HAKIOS-UFS-DIAG: send the UFS driver's reports into the loader's live ring.
 
 The ticker stalls of tens of seconds match CMD_TIMEOUT_NS (5 s) times a handful of retries, but
@@ -39,7 +39,12 @@ lafa_ufs_note(const char *fmt, ...)
 
 def main() -> int:
     root = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else "xnu")
-    f = next(root.rglob("sweet_ufs.c"), None)
+    # the built driver is synced from hakios/drivers/storage/hakios.ufs.c (outside the xnu tree);
+    # patch the source first, or the sync in make-kernel.sh overwrites it
+    src = root.parent.parent.parent / "drivers/storage/hakios.ufs.c"
+    f = src if src.exists() else next(root.rglob("hakios.ufs.c"), None)
+    if f is None:
+        f = next(root.rglob("sweet_ufs.c"), None)
     if f is None:
         print("patch-ufs-diag: MISS sweet_ufs.c")
         return 1
