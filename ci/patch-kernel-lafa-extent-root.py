@@ -7,16 +7,13 @@ the kernel's own UFS driver through the extent table in /chosen:
     fuxi-root-extents = array of {file block, partition block, blocks} (4 KiB units)
     fuxi-root-blocks  = the root file's size in blocks
 
-That code exists in bsd/dev/sweet_ufs.c but is compiled only for FUXI, and its one caller is
-guarded with `#if defined(FUXI) && !defined(PANDORA)` -- so a PANDORA build (ours) never loads the
-extents, and every read of /dev/ufsroot0 fails with EIO.  0122 already made the table itself
-PANDORA-capable (16384 entries, binary search), so only two things are missing:
+That code exists in bsd/dev/sweet_ufs.c and is compiled only for FUXI.  The loader side
+(xnuloader/loader.c) writes the two /chosen properties from the staged extent table; this patch
+only turns the code on for our PANDORA build by adding -DFUXI=1 to CFLAGS_ARM64.
 
-  1. -DFUXI=1 in the arm64 machine flags (so the code is compiled at all);
-  2. the caller's guard relaxed from `FUXI && !PANDORA` to `FUXI`.
-
-The loader side (xnuloader/loader.c) writes the two /chosen properties from the staged extent
-table.
+The define is inserted right after the "=" so a line that ends in a backslash keeps its
+continuation (appending at the end of such a line breaks make with "recipe commences before first
+target").
 
 Idempotent.
 
@@ -36,46 +33,25 @@ def add_define(root: pathlib.Path) -> int:
         print("patch-extent-root: MISS makedefs/MakeInc.def")
         return 0
     text = f.read_text(errors="surrogateescape")
-    if MARK in text:
-        print("patch-extent-root: define already there")
+    if DEFINE in text:
+        print("patch-extent-root: %s already there" % DEFINE)
         return 0
     count = 0
 
     def add(m):
         nonlocal count
-        line = m.group(0)
-        if DEFINE in line:
-            return line
         count += 1
-        return line.rstrip() + " " + DEFINE + "   /* " + MARK + " */"
+        return m.group(1) + DEFINE + " " + m.group(2)
 
-    text = re.sub(r"(?m)^CFLAGS_ARM64\s*=.*$", add, text)
+    text = re.sub(r"(?m)^(CFLAGS_ARM64 = )(.*)$", add, text)
     f.write_text(text, errors="surrogateescape")
     print("patch-extent-root: %s added to CFLAGS_ARM64 (%d line(s))" % (DEFINE, count))
     return count
 
 
-def relax_guard(root: pathlib.Path) -> int:
-    f = next(root.rglob("sweet_ufs.c"), None)
-    if f is None:
-        print("patch-extent-root: MISS sweet_ufs.c")
-        return 0
-    text = f.read_text(errors="surrogateescape")
-    old = "#if defined(FUXI) && !defined(PANDORA)"
-    if old not in text:
-        print("patch-extent-root: guard already relaxed or absent")
-        return 0
-    text = text.replace(old, "#if defined(FUXI)   /* " + MARK + ": PANDORA too */")
-    f.write_text(text, errors="surrogateescape")
-    print("patch-extent-root: extent-root guard relaxed for PANDORA")
-    return 1
-
-
 def main() -> int:
     root = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else "xnu")
-    a = add_define(root)
-    b = relax_guard(root)
-    return 0 if (a or b) else 1
+    return 0 if add_define(root) else 1
 
 
 if __name__ == "__main__":
