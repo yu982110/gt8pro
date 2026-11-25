@@ -350,6 +350,11 @@ jobs:
         continue-on-error: true
         run: python3 ci/patch-kernel-spawn-ret.py hakios/xnu-src/xnu-8796.121.2
 
+
+      # 2026-11-25 21:0x: the second (persona) spawn policy check.
+      - name: patch kernel persona spawn relax (no entitlement model)
+        continue-on-error: true
+        run: python3 ci/patch-kernel-persona-relax.py hakios/xnu-src/xnu-8796.121.2
       - name: patch kernel ret probe (errno of xpcproxy's failed syscalls)
         continue-on-error: true
         run: python3 ci/patch-kernel-retprobe.py hakios/xnu-src/xnu-8796.121.2
