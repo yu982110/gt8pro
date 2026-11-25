@@ -269,8 +269,7 @@ jobs:
       # itself is investigated; take it out when logd's SIGTRAP is fixed.
       - name: patch kernel nologd (refuse logd so its crash chain cannot freeze the boot)
         continue-on-error: true
-        run: python3 ci/patch-kernel-nologd.py hakios/xnu-src/xnu-8796.121.2
-
+        run: echo SKIP-nologd
       - name: patch kernel workq probe (which workq_kernreturn operation the freeze is in)
         continue-on-error: true
         run: python3 ci/patch-kernel-workq-probe.py hakios/xnu-src/xnu-8796.121.2
