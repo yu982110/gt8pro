@@ -248,6 +248,11 @@ jobs:
         continue-on-error: true
         run: echo SKIP-sysprobe
 
+
+      # 2026-11-25 22:0x: UFS timeouts must reach the loader ring (they explain the stalls).
+      - name: patch kernel UFS diagnostics into the live ring
+        continue-on-error: true
+        run: python3 ci/patch-kernel-ufs-diag.py hakios/xnu-src/xnu-8796.121.2
       - name: patch kernel proc_info probe (where the last syscall hangs)
         continue-on-error: true
         run: python3 ci/patch-kernel-procinfo-probe.py hakios/xnu-src/xnu-8796.121.2
