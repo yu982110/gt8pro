@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """HAKIOS-STOP: spin at an early kernel-init point, chosen by a boot argument.
 
 The noinit test (stop in bsd_init after mountroot) still resets in 55-78 s, and every service the
@@ -40,6 +40,7 @@ GUARD = (
 
 ANCHORS = [
     ("\tPE_init_iokit();\n", 1),
+    ("\tbsd_init();\n", 2),
     ("\tkernel_startup_initialize_upto(STARTUP_SUB_EARLY_BOOT);\n", 3),
 ]
 
