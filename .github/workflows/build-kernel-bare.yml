@@ -282,6 +282,10 @@ jobs:
         continue-on-error: true
         run: python3 ci/patch-kernel-ufs-writefirst.py hakios/xnu-src/xnu-8796.121.2
 
+
+      - name: patch kernel data volume through the loader mailbox
+        continue-on-error: true
+        run: python3 ci/patch-kernel-data-mailbox.py hakios/xnu-src/xnu-8796.121.2
       - name: patch kernel jetsam (no victim is not a panic)
         continue-on-error: true
         run: python3 ci/patch-kernel-jetsam.py hakios/xnu-src/xnu-8796.121.2
