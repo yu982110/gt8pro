@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """HAKIOS-LAFA-EXTENT-ROOT: build the FUXI extent-root path into the PANDORA kernel.
 
 The flash root image (the 3.4 GB APFS container at 300 GiB inside userdata) can only be read by
@@ -43,6 +43,7 @@ def add_define(root: pathlib.Path) -> int:
         count += 1
         return m.group(1) + DEFINE + " " + m.group(2)
 
+    text = re.sub(r"(?m)^(CFLAGS_ARM64	= )(.*)$", add, text)
     text = re.sub(r"(?m)^(CFLAGS_ARM64 = )(.*)$", add, text)
     f.write_text(text, errors="surrogateescape")
     print("patch-extent-root: %s added to CFLAGS_ARM64 (%d line(s))" % (DEFINE, count))
