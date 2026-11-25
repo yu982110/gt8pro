@@ -246,7 +246,7 @@ jobs:
 
       - name: patch kernel sysprobe (name the syscall a process stops in, logd included)
         continue-on-error: true
-        run: python3 ci/patch-kernel-sysprobe.py hakios/xnu-src/xnu-8796.121.2
+        run: echo SKIP-sysprobe
 
       - name: patch kernel proc_info probe (where the last syscall hangs)
         continue-on-error: true
