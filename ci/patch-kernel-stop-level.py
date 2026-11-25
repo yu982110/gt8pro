@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """HAKIOS-STOP: spin at an early kernel-init point, chosen by a boot argument.
 
 The reset was narrowed by stopping earlier and earlier:
@@ -51,6 +51,7 @@ STARTUP_ANCHORS = [
 ]
 
 BSDINIT_ANCHORS = [
+    ('\tbsd_init_kprintf("calling dev_kmem_init\\n");\n', 5),
     ('\tbsd_init_kprintf("calling bsd_bufferinit\\n");\n', 4),
 ]
 
