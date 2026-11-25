@@ -38,7 +38,7 @@ jobs:
       - name: hakios source + lafa device package
         run: |
           set -euo pipefail
-          git clone --depth 1 https://github.com/oosexgang/hakios-xnu-kernel.git hakios
+          git clone --depth 1 --branch main https://github.com/oosexgang/hakios-xnu-kernel.git hakios
           cp -r lafa hakios/devices/lafa
           grep -q '^device lafa' hakios/devices/manifest.conf || \
             printf '\ndevice lafa\n\tpath        devices/lafa\n' >> hakios/devices/manifest.conf
