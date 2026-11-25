@@ -1,4 +1,4 @@
-﻿name: build lafa kernel BARE (framebuffer patch only)
+name: build lafa kernel BARE (framebuffer patch only)
 
 "on":
   workflow_dispatch:
@@ -436,6 +436,12 @@ jobs:
 
       - name: patch kernel Adreno 840 user client (NativeAdreno ABI v1, what Turnip opens)
         run: python3 ci/patch-kernel-pandora-iokit.py hakios/xnu-src/xnu-8796.121.2
+
+      # 2026-11-25 17:3x: the by-hand display/HID/GPU starts run unconditionally; gate them so a
+      # boot can answer whether the kernel resets even with no such service running.
+      - name: patch kernel service switch (hakios_services=0 skips display/HID/GPU starts)
+        continue-on-error: true
+        run: python3 ci/patch-kernel-svc-off.py hakios/xnu-src/xnu-8796.121.2
 
       - name: patch kernel print the Mach-O magic exec rejected
         run: python3 ci/patch-kernel-execmagic-probe.py hakios/xnu-src/xnu-8796.121.2
