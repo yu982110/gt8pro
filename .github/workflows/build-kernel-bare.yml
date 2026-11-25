@@ -278,6 +278,10 @@ jobs:
         run: python3 ci/patch-kernel-ufs-extent-root.py hakios/xnu-src/xnu-8796.121.2
 
 
+      - name: patch kernel UFS data-volume window (start of the darwin partition)
+        continue-on-error: true
+        run: python3 ci/patch-kernel-ufs-writefirst.py hakios/xnu-src/xnu-8796.121.2
+
       - name: patch kernel jetsam (no victim is not a panic)
         continue-on-error: true
         run: python3 ci/patch-kernel-jetsam.py hakios/xnu-src/xnu-8796.121.2
