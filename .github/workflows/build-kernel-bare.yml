@@ -287,6 +287,10 @@ jobs:
         continue-on-error: true
         run: python3 ci/patch-kernel-data-mailbox.py hakios/xnu-src/xnu-8796.121.2
       - name: patch kernel jetsam (no victim is not a panic)
+
+      - name: patch kernel posix_spawn error diagnostic
+        continue-on-error: true
+        run: python3 ci/patch-kernel-spawn-diag.py hakios/xnu-src/xnu-8796.121.2
         continue-on-error: true
         run: python3 ci/patch-kernel-jetsam.py hakios/xnu-src/xnu-8796.121.2
       # 2026-11-22 10:09 (gpu60): the last screen line before the reset was
