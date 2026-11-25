@@ -141,6 +141,11 @@ jobs:
       - name: patch kernel native cs hash
         run: python3 ci/patch-kernel-native-cs-hash.py hakios/xnu-src/xnu-8796.121.2
 
+
+      # 2026-11-26 00:3x: FUXI extent-root for PANDORA (the flash root image lives in userdata).
+      - name: patch kernel extent root for PANDORA (FUXI flag + guard)
+        continue-on-error: true
+        run: python3 ci/patch-kernel-lafa-extent-root.py hakios/xnu-src/xnu-8796.121.2
       - name: apply unixnu 4K patches
         run: |
           cd hakios/xnu-src/xnu-8796.121.2
