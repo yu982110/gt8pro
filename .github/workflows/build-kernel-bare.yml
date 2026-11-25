@@ -269,10 +269,18 @@ jobs:
         continue-on-error: true
         run: python3 ci/patch-kernel-ufshc-ver4.py hakios/xnu-src/xnu-8796.121.2
 
+
+      - name: patch kernel UFSHCI slot-0 proof (let native take the controller)
+        continue-on-error: true
+        run: python3 ci/patch-kernel-ufshc-noproof.py hakios/xnu-src/xnu-8796.121.2
       - name: patch kernel UFS extent root (PANDORA flash root through the extent table)
         continue-on-error: true
         run: python3 ci/patch-kernel-ufs-extent-root.py hakios/xnu-src/xnu-8796.121.2
 
+
+      - name: patch kernel jetsam (no victim is not a panic)
+        continue-on-error: true
+        run: python3 ci/patch-kernel-jetsam.py hakios/xnu-src/xnu-8796.121.2
       # 2026-11-22 10:09 (gpu60): the last screen line before the reset was
       #   HAKIOS-PROCI entry pid 53 call 2 flavor 13     (and no "done" line)
       # right after pid 53's proc_exit / task_terminate_internal, while flavor 15/8/18 on the
