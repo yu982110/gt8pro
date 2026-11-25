@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """HAKIOS-SVC-OFF: hakios_services=0 skips the by-hand display/HID/GPU starts.
 
 The port starts these services "by hand" from GenericARMPE.cpp at mountroot time and they run
@@ -49,7 +49,7 @@ CALLS = [
 
 def main() -> int:
     root = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else "xnu")
-    f = next(root.rglob("pe/arm/GenericARMPE.cpp"), None)
+    f = next(root.rglob("GenericARMPE.cpp"), None)
     if f is None:
         print("patch-svc-off: MISS GenericARMPE.cpp")
         return 1
