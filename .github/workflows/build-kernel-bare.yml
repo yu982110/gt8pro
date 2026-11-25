@@ -259,7 +259,19 @@ jobs:
         continue-on-error: true
         run: python3 ci/patch-kernel-ufs-diag.py hakios/xnu-src/xnu-8796.121.2
       - name: patch kernel proc_info probe (where the last syscall hangs)
+
+      - name: patch kernel cslog (signature logging for a named process)
         continue-on-error: true
+        run: python3 ci/patch-kernel-cslog.py hakios/xnu-src/xnu-8796.121.2
+        continue-on-error: true
+
+      - name: patch kernel UFSHCI 4.0 acceptance (native UFS on this controller)
+        continue-on-error: true
+        run: python3 ci/patch-kernel-ufshc-ver4.py hakios/xnu-src/xnu-8796.121.2
+
+      - name: patch kernel UFS extent root (PANDORA flash root through the extent table)
+        continue-on-error: true
+        run: python3 ci/patch-kernel-ufs-extent-root.py hakios/xnu-src/xnu-8796.121.2
         run: python3 ci/patch-kernel-procinfo-probe.py hakios/xnu-src/xnu-8796.121.2
 
       # 2026-11-22 10:09 (gpu60): the last screen line before the reset was
