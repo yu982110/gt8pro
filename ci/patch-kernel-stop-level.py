@@ -51,6 +51,7 @@ STARTUP_ANCHORS = [
 ]
 
 BSDINIT_ANCHORS = [
+    ('\tbsd_init_kprintf("calling kauth_init\\n");\n', 7),
     ('\tbsd_init_kprintf("calling kmem_suballoc\\n");\n', 6),
     ('\tbsd_init_kprintf("calling bsd_bufferinit\\n");\n', 4),
 ]
