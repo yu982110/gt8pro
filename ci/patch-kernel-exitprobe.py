@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """patch-kernel-exitprobe.py -- say how far a process's exit gets, on the channel that works.
 
 The first version of this patch used printf().  Nothing came out, and the run that finally showed
@@ -30,7 +30,7 @@ def probe(indent, fmt, args=""):
         indent, indent + call.replace("\t", " "))
 
 
-P_EXIT = probe("\t\t", MARK + ": exit_with_reason pid %d rv %d", "p->p_pid, rv")
+P_EXIT = probe("\t\t", MARK + ": exit_with_reason %s pid %d rv %d", "p->p_comm, p->p_pid, rv")
 P_PROCENTRY = probe("\t", MARK + ": proc_exit entry pid %d", "p->p_pid")
 P_BEFORE_TERM = probe("\t\t", MARK + ": before task_terminate_internal pid %d", "p->p_pid")
 P_AFTER_TERM = probe("\t\t", MARK + ": after task_terminate_internal pid %d", "p->p_pid")
