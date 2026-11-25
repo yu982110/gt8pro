@@ -1,4 +1,4 @@
-name: build lafa kernel BARE (framebuffer patch only)
+﻿name: build lafa kernel BARE (framebuffer patch only)
 
 "on":
   workflow_dispatch:
@@ -439,6 +439,11 @@ jobs:
 
       # 2026-11-25 17:3x: the by-hand display/HID/GPU starts run unconditionally; gate them so a
       # boot can answer whether the kernel resets even with no such service running.
+      # 2026-11-25 17:4x: earlier stop levels (hakios_stop=1/3) to bisect the kernel init.
+      - name: patch kernel stop levels (spin before PE_init_iokit / EARLY_BOOT)
+        continue-on-error: true
+        run: python3 ci/patch-kernel-stop-level.py hakios/xnu-src/xnu-8796.121.2
+
       - name: patch kernel service switch (hakios_services=0 skips display/HID/GPU starts)
         continue-on-error: true
         run: python3 ci/patch-kernel-svc-off.py hakios/xnu-src/xnu-8796.121.2
