@@ -382,25 +382,31 @@ jobs:
 
       - name: patch kernel display (Sweet IOSurface + IOMobileFramebuffer)
         continue-on-error: true
-        run: echo SKIP-P2-display
+        run: python3 ci/patch-kernel-display.py hakios/xnu-src/xnu-8796.121.2 2>&1 | tail -25
 
       - name: patch kernel HID event services (SweetHID + IOHIDEvent, from the reference port)
         continue-on-error: true
         run: |
           cd hakios/xnu-src/xnu-8796.121.2
-          echo SKIP-P2-hid-event
+          patch -p1 --batch --forward < "$GITHUB_WORKSPACE/ci/0058-sweet-hid-event-services.patch"
 
       - name: patch kernel HID config (the two integration hunks the HID patch cannot apply)
         continue-on-error: true
-        run: echo SKIP-P2-hid-config
+        run: python3 ci/patch-kernel-hid-config.py hakios/xnu-src/xnu-8796.121.2
 
       - name: patch kernel DPU scanout
         continue-on-error: true
-        run: echo SKIP-P2-dpu
+        run: python3 ci/patch-kernel-dpu.py hakios/xnu-src/xnu-8796.121.2 2>&1 | tail -25
 
       - name: patch kernel display start (the config table is not probed here, so start the services by hand)
         continue-on-error: true
-        run: echo SKIP-P2-display-start
+        run: python3 ci/patch-kernel-display-start.py hakios/xnu-src/xnu-8796.121.2 2>&1 | tail -10
+
+      # 2026-11-25 19:5x: the frame the host is waiting for -- the kernel paints the framebuffer
+      # from its own display service (SweetFramebuffer/AppleCLCD).
+      - name: patch kernel framebuffer fill (the kernel paints the panel)
+        continue-on-error: true
+        run: python3 ci/patch-kernel-fb-fill-kernel.py hakios/xnu-src/xnu-8796.121.2
 
       # 2026-11-22 10:52: DISABLED after one bad boot.  Taking AppleCLCD::swap() out also took the
       # console pause inside it out, and that pause is protective (this port's kernel console would
@@ -411,11 +417,11 @@ jobs:
       #   run: python3 ci/patch-kernel-display-noswap.py hakios/xnu-src/xnu-8796.121.2 2>&1 | tail -5
       - name: patch kernel HID start (IOResources provider, not the PE)
         continue-on-error: true
-        run: echo SKIP-P2-hid-start
+        run: python3 ci/patch-kernel-hid-start.py hakios/xnu-src/xnu-8796.121.2
 
       - name: patch kernel display probe (who opens the framebuffer, who presents a frame)
         continue-on-error: true
-        run: echo SKIP-P2-display-probe
+        run: python3 ci/patch-kernel-display-probe.py hakios/xnu-src/xnu-8796.121.2 2>&1 | tail -10
       - name: dump SweetFramebuffer for the logical-size fix (reference)
         continue-on-error: true
         run: |
@@ -426,16 +432,16 @@ jobs:
           sed -n '/AppleCLCD::start/,/registerService/p' "$F" | head -50
 
       - name: patch kernel MiniIOSurface weak (the display build drops MiniIOSurface.cpp)
-        run: echo SKIP-P2-miniiosurface
+        run: python3 ci/patch-kernel-miniiosurface-weak.py hakios/xnu-src/xnu-8796.121.2
 
       # the object tree is cached now: patched sources get fresh mtimes, so make
       # rebuilds exactly the files the patches touched
 
       - name: patch kernel Adreno 840 level 1 probe (read only)
-        run: echo SKIP-P2-gpu-probe
+        run: python3 ci/patch-kernel-pandora-gpu-probe.py hakios/xnu-src/xnu-8796.121.2
 
       - name: patch kernel Adreno 840 user client (NativeAdreno ABI v1, what Turnip opens)
-        run: echo SKIP-P2-pandora-iokit
+        run: python3 ci/patch-kernel-pandora-iokit.py hakios/xnu-src/xnu-8796.121.2
 
       # 2026-11-25 17:3x: the by-hand display/HID/GPU starts run unconditionally; gate them so a
       # boot can answer whether the kernel resets even with no such service running.
